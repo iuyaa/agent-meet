@@ -134,3 +134,7 @@ live host and does not start a replacement coordinator.
 
 In all examples replace `HOST` with the original initiating identity (Codex, Claude,
 pi, OpenCode or your configured label). Being host never requires a new host CLI.
+
+New discussions normally live in their own project `.agent-meet/` subdirectory.
+This does not change existing room locations. Resume with the original room path;
+do not prepare a new directory or run init to continue an old discussion.

@@ -40,7 +40,25 @@ Resolve script paths relative to this SKILL.md. Resolve the project directory
 from the user's task. Use absolute paths; quote paths with spaces. On Windows,
 `py -3` may replace `python3`.
 
-Write a UTF-8 briefing JSON using your file-writing tool. Derive it from context
+By default store each NEW discussion under the target PROJECT's `.agent-meet/`,
+not the skill install directory and not a temporary folder. Prepare its directory
+before writing briefing and role inputs:
+
+```bash
+python3 /path/to/agent-meet/scripts/storage.py prepare --cwd PROJECT --topic "SHORT_TOPIC"
+```
+
+Use the returned `room`, `discussion_directory`, `briefing_file` and `roles_file`.
+Below, `ROOM`, `DISCUSSION_DIR`, `BRIEFING_FILE` and `ROLES_FILE` mean those actual
+absolute paths; `PROJECT` means the user's project directory. Never pass the literal
+placeholders. Use a short topic label based on the user's request. The generated
+folder includes local timestamp, a sanitized label and a random suffix, so multiple
+discussions remain separate. `.agent-meet/.gitignore` ignores its contents without
+changing project-root Git configuration. Prepare creates no database or model call.
+If the user supplied an explicit room path, use it instead of preparing another.
+For continuation, always use the ORIGINAL ROOM and skip preparation/initialization.
+
+Write a UTF-8 briefing JSON at BRIEFING_FILE using your file-writing tool. Derive it from context
 you actually have and verified project evidence. Do not pretend to export the
 entire original conversation, invent decisions, or turn assumptions into facts.
 Include these exact fields; all lists may be empty if the information is unknown:
@@ -64,12 +82,12 @@ previous decisions. Briefly tell the user the discussion focus and important
 constraints, and make the saved briefing path available. This is not an approval
 step: proceed with the already-authorized discussion.
 
-Choose a fresh room path outside version control, then initialize:
+Initialize the prepared ROOM (or the user's explicit custom room):
 
 ```bash
 python3 /path/to/agent-meet/scripts/consult.py init \
-  --room /shared/new-discussion.sqlite --cwd /absolute/path/project \
-  --briefing-file /shared/briefing.json --main HOST --backend PEER_BACKEND \
+  --room ROOM --cwd PROJECT \
+  --briefing-file BRIEFING_FILE --main HOST --backend PEER_BACKEND \
   --max-messages 12 --minutes 10
 ```
 
@@ -85,10 +103,13 @@ If the invited CLI is not on PATH, add `--cli /absolute/path/to/executable` (not
 shell command). Read the adapter reference for supported Windows launchers.
 
 Initialization validates and saves `briefing.json` and `briefing.md` in
-`ROOM.sqlite.consult/`, joins the identities, and records the briefing as YOUR
+`<ROOM>.consult/`, joins the identities, and records the briefing as YOUR
 opening message. It does not call a model or create another main agent. Do not
 duplicate the opening with another send. Reinitializing the exact same context
-is idempotent; different context/project/identities require a fresh room.
+is idempotent when the same explicit ROOM is reused; different context/project/
+identities require a fresh room. Low-level `consult.py init` and `group.py init`
+may also omit `--room`, allocating a NEW project-local discussion and returning
+its absolute `room`. Never omit it on later commands or guess the latest room.
 
 ## 2. Open the local discussion page
 
@@ -96,7 +117,7 @@ After initialization, start the viewer and try to open it in the local browser:
 
 ```bash
 python3 /path/to/agent-meet/scripts/view.py start \
-  --room /shared/new-discussion.sqlite --open
+  --room ROOM --open
 ```
 
 Share the returned `url` as a clickable link, keeping its full `#token` fragment.
@@ -131,13 +152,13 @@ installation is needed. Open it on the machine running the skill. In a remote
 environment, a localhost link points to that remote machine; use a supported
 local tunnel if available or continue with CLI/report output. Do not silently
 bind publicly or publish the discussion. The URL contains access to this room;
-share it only with the user. Local state is stored in `ROOM.sqlite.view/`.
+share it only with the user. Local state is stored in `<ROOM>.view/`.
 
 ## 3. Call the invited agent and receive one reply
 
 ```bash
 python3 /path/to/agent-meet/scripts/consult.py reply \
-  --room /shared/new-discussion.sqlite --request-id peer-1
+  --room ROOM --request-id peer-1
 ```
 
 **Keep this tool execution pending until it returns.** If the host tool yields a
@@ -163,10 +184,10 @@ For each follow-up, write your own message to a UTF-8 file, then:
 
 ```bash
 python3 /path/to/agent-meet/scripts/chat.py send \
-  --room /shared/new-discussion.sqlite --as HOST \
-  --request-id main-2 --text-file /shared/follow-up.txt
+  --room ROOM --as HOST \
+  --request-id main-2 --text-file DISCUSSION_DIR/follow-up.txt
 python3 /path/to/agent-meet/scripts/consult.py reply \
-  --room /shared/new-discussion.sqlite --request-id peer-2
+  --room ROOM --request-id peer-2
 ```
 
 Replace `HOST` with your configured main identity in ALL commands, including assessment, extension and proposals. Messages
@@ -202,7 +223,7 @@ the cap. New replies/reviews require a new assessment before another draft.
 Read the actual record before drafting the conclusion:
 
 ```bash
-python3 /path/to/agent-meet/scripts/chat.py read --room /shared/new-discussion.sqlite --as HOST --after 0
+python3 /path/to/agent-meet/scripts/chat.py read --room ROOM --as HOST --after 0
 ```
 
 If `has_more` is true, continue from `next_after`. You are responsible for the
@@ -221,10 +242,10 @@ JSON using the exact schema below and real message IDs from BOTH authors:
 
 ```bash
 python3 /path/to/agent-meet/scripts/chat.py propose \
-  --room /shared/new-discussion.sqlite --as HOST \
-  --request-id main-conclusion-1 --file /shared/conclusion.json
+  --room ROOM --as HOST \
+  --request-id main-conclusion-1 --file DISCUSSION_DIR/conclusion.json
 python3 /path/to/agent-meet/scripts/consult.py reply \
-  --room /shared/new-discussion.sqlite --request-id peer-review-1
+  --room ROOM --request-id peer-review-1
 ```
 
 The reply now reviews the pending proposal. Acceptance closes the room; it means
@@ -236,7 +257,7 @@ four rejected drafts, stop and export the differences rather than force agreemen
 
 ```bash
 python3 /path/to/agent-meet/scripts/chat.py export \
-  --room /shared/new-discussion.sqlite --output /shared/discussion-report.md
+  --room ROOM --output DISCUSSION_DIR/report.md
 ```
 
 Exports contain the context briefing in the opening message, full exchange,
@@ -255,14 +276,14 @@ responses return an error to you without inventing a reply or agreement.
 Inspect consultation state and named local logs with:
 
 ```bash
-python3 /path/to/agent-meet/scripts/consult.py status --room /shared/new-discussion.sqlite
+python3 /path/to/agent-meet/scripts/consult.py status --room ROOM
 ```
 
 On a user stop request, close the room; an active foreground call checks it and
 stops its CLI process:
 
 ```bash
-python3 /path/to/agent-meet/scripts/chat.py stop --room /shared/new-discussion.sqlite --reason '用户停止'
+python3 /path/to/agent-meet/scripts/chat.py stop --room ROOM --reason '用户停止'
 ```
 
 Keep discussion text in files rather than interpolating it into shell commands.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 — Project-local discussions
+
+- New consult/group rooms default to PROJECT/.agent-meet/TIMESTAMP-TOPIC-ID/discussion.sqlite.
+- Added storage.py prepare so briefing, role inputs, follow-ups and exports can share the discussion directory.
+- Each discussion gets a separate directory; local ignore rules keep new discussion data out of Git without changing project-root configuration.
+- Init/status/reply/round return the absolute room path. Follow-ups still require an explicit room; existing paths and native sessions remain unchanged.
+
 ## 0.8.1 — Meet
 
 - Extracted the standalone project from `golutra/skills/agent-chat`, preserving the nine skill commits.

@@ -6,6 +6,7 @@
 **谁发起，谁保留当前会话和上下文、担任主持人。** 被邀请者逐轮回复，主持人结合原有背景
 追问、判断和总结；后续调用及追加讨论恢复各参与者原来的原生会话。
 
+v0.9 默认按项目存放讨论，每次讨论独立一个 `.agent-meet/` 子目录，自动忽略本地数据。
 v0.8.1 正式独立为 Meet，仓库与 skill 名称统一为 `agent-meet`，保持 v0.8 的功能与会话格式。
 v0.8 把主持人和调用后端分开，双人及多角色模式支持 Codex、Claude、pi、OpenCode。
 例如 Claude 主持、Codex 参与；pi 主持、OpenCode 参与；一个群混用四种 agent。
@@ -18,7 +19,7 @@ Python 3.9+，仅用标准库。不依赖 Golutra。只有发起端需要此 ski
 
 ## 获取和更新
 
-[下载 v0.8.1 ZIP](https://github.com/iuyaa/agent-meet/raw/refs/heads/main/releases/agent-meet-v0.8.1.zip)。
+[下载 v0.9.0 ZIP](https://github.com/iuyaa/agent-meet/raw/refs/heads/main/releases/agent-meet-v0.9.0.zip)。
 解压后将 `agent-meet` 文件夹放入宿主的 skill 目录，调用 `$agent-meet`。
 仓库根目录就是技能根目录，也可以直接克隆到所需安装位置：
 
@@ -33,7 +34,7 @@ git clone https://github.com/iuyaa/agent-meet.git /absolute/path/to/skills/agent
 **保留原来的长会话。** 更新后让当前主持人重新读取更新后的 SKILL.md；
 不要为了加载新版本而新建一个没有历史的聊天。例如：
 
-> 重新读取 `/absolute/path/agent-meet/SKILL.md`，按 Meet v0.8.1 流程操作。
+> 重新读取 `/absolute/path/agent-meet/SKILL.md`，按 Meet v0.9 流程操作。
 > 保留你当前会话的上下文，和 Claude 讨论一下 glp-content 的 agent 应该怎么改。
 
 正常加载新版 skill 后，也可以继续使用：
@@ -48,6 +49,42 @@ git clone https://github.com/iuyaa/agent-meet.git /absolute/path/to/skills/agent
 如果已有旧版页面服务运行，更新后先用 `view.py close --room ...` 关闭页面服务，
 再用 `view.py start --room ... --open` 打开同一讨论。只关闭浏览器标签不会更新服务代码。
 已有讨论记录和模型会话不受影响。
+
+## 讨论数据存放位置
+
+默认放在被讨论项目的 `.agent-meet/` 目录，每次讨论单独建子目录：
+
+```text
+项目/
+├─ src/
+└─ .agent-meet/
+   ├─ .gitignore
+   ├─ 20261019-213000-方案评审-a1b2c3/
+   │  ├─ briefing.json
+   │  ├─ discussion.sqlite
+   │  └─ discussion.sqlite.consult/
+   └─ 20261019-220000-需求讨论-d4e5f6/
+      ├─ roles.json
+      ├─ discussion.sqlite
+      └─ discussion.sqlite.group/
+```
+
+目录名包含运行机器的本地时间、议题简名和随机后缀，同一议题也不会覆盖旧讨论。
+`.agent-meet/.gitignore` 自动忽略整个目录内的新数据，不改项目根目录 `.gitignore`。
+它不会取消 Git 已经跟踪的旧文件。用户明确指定 `--room` 时仍使用指定位置；
+已有讨论不搬迁、不重新初始化，续聊始终使用原来的路径和原生会话。
+
+技能先用 `storage.py prepare --cwd 项目路径 --topic 议题` 准备目录，再把简报、角色配置、
+追问文件和导出报告放在返回的 `discussion_directory` 中。返回的 `room` 是数据库文件路径；后续示例的 `ROOM` 表示这条实际路径，
+`DISCUSSION_DIR` 表示它所在的讨论子目录，均需替换成实际值。
+`prepare` 不调用模型、不创建数据库；之后初始化时显式传入这个 `--room`。
+
+直接调用 `consult.py init` 或 `group.py init` 时也可省略 `--room`，工具自动创建新目录并
+返回绝对 `room`。省略它的每次初始化都是新讨论；后续 reply / round / status 等命令仍须
+显式传入原 `--room`，不会擅自选取“最新的一次”。
+
+备份时保留整个讨论子目录，以及各 CLI 自己保存的原生会话资料。数据库只记录本地讨论；
+pi 会话文件在 `.peers/` 中，Claude/Codex/OpenCode 原生记录仍依赖各自 CLI 的存储。
 
 ## 角色和轮次如何设置
 
@@ -99,8 +136,8 @@ v0.6 的已有房间也能原地使用，不用迁移或初始化新房间。
 若不追加，则保留并导出实际进展与未解决问题。
 
 ```bash
-python3 /absolute/path/agent-meet/scripts/chat.py assess --room /absolute/path/work/discussion.sqlite --as codex --request-id readiness-1 --file /absolute/path/work/assessment.json
-python3 /absolute/path/agent-meet/scripts/chat.py extend --room /absolute/path/work/discussion.sqlite --as codex --request-id approved-more-1 --rounds 2 --minutes 10 --reason '用户确认再讨论两轮，核对失败路径'
+python3 /absolute/path/agent-meet/scripts/chat.py assess --room ROOM --as codex --request-id readiness-1 --file DISCUSSION_DIR/assessment.json
+python3 /absolute/path/agent-meet/scripts/chat.py extend --room ROOM --as codex --request-id approved-more-1 --rounds 2 --minutes 10 --reason '用户确认再讨论两轮，核对失败路径'
 ```
 
 `assess` 结构见 [examples/assessment.json](examples/assessment.json)。新建前台讨论在没有有效
@@ -152,20 +189,22 @@ python3 /absolute/path/agent-meet/scripts/chat.py extend --room /absolute/path/w
 八个字段都必须提供，不知道的列表可以为空，不应编造已有决策。
 
 ```bash
-python3 /absolute/path/agent-meet/scripts/consult.py init --room /absolute/path/work/new-discussion.sqlite --cwd /absolute/path/project --briefing-file /absolute/path/work/briefing.json --main codex --backend claude
-python3 /absolute/path/agent-meet/scripts/view.py start --room /absolute/path/work/new-discussion.sqlite --open
-python3 /absolute/path/agent-meet/scripts/consult.py reply --room /absolute/path/work/new-discussion.sqlite --request-id claude-1
+python3 /absolute/path/agent-meet/scripts/consult.py init --cwd /absolute/path/project --briefing-file /absolute/path/work/briefing.json --main codex --backend claude
+python3 /absolute/path/agent-meet/scripts/view.py start --room ROOM --open
+python3 /absolute/path/agent-meet/scripts/consult.py reply --room ROOM --request-id claude-1
 ```
 
+`ROOM` 表示初始化返回的实际 `room` 路径，不能直接传入这个占位词。
 `init` 自动加入双方身份，把简报记录为主参与者的第一条消息，暂不调用模型。
-简报保存在 `ROOM.sqlite.consult/briefing.json` 和 `briefing.md`，你可以直接查看。
+简报保存在 `<ROOM>.consult/briefing.json` 和 `briefing.md`，你可以直接查看。
+省略 `--room` 的初始化会在项目 `.agent-meet/` 下新建独立目录。
 `reply` 只执行一次 Claude 调用，返回并记录这一轮回复，不运行后台聊天循环。
 
 原主持人判断回复后，如需追问，先写好 UTF-8 消息文件，再执行：
 
 ```bash
-python3 /absolute/path/agent-meet/scripts/chat.py send --room /absolute/path/work/new-discussion.sqlite --as codex --request-id main-2 --text-file /absolute/path/work/follow-up.txt
-python3 /absolute/path/agent-meet/scripts/consult.py reply --room /absolute/path/work/new-discussion.sqlite --request-id claude-2
+python3 /absolute/path/agent-meet/scripts/chat.py send --room ROOM --as codex --request-id main-2 --text-file DISCUSSION_DIR/follow-up.txt
+python3 /absolute/path/agent-meet/scripts/consult.py reply --room ROOM --request-id claude-2
 ```
 
 Claude 不在 PATH 时，初始化加 `--cli /absolute/path/to/claude`，传入可执行文件路径。
@@ -204,8 +243,8 @@ Windows 可用 `py -3` 替代 `python3`，路径含空格时加引号；原生 C
 讨论结束后页面仍可查看。关闭浏览器标签不停止讨论；关闭本地页面服务也不停止讨论：
 
 ```bash
-python3 /absolute/path/agent-meet/scripts/view.py status --room /absolute/path/work/new-discussion.sqlite
-python3 /absolute/path/agent-meet/scripts/view.py close --room /absolute/path/work/new-discussion.sqlite
+python3 /absolute/path/agent-meet/scripts/view.py status --room ROOM
+python3 /absolute/path/agent-meet/scripts/view.py close --room ROOM
 ```
 
 页面不是宿主 UI 的唤醒接口，不能给已经结束的 Codex Desktop 回合注入消息。
@@ -218,15 +257,15 @@ python3 /absolute/path/agent-meet/scripts/view.py close --room /absolute/path/wo
 审核未通过的草案不会被标为共识；超时、报错、无回复也不算同意。
 
 ```bash
-python3 /absolute/path/agent-meet/scripts/consult.py status --room /absolute/path/work/new-discussion.sqlite
-python3 /absolute/path/agent-meet/scripts/chat.py stop --room /absolute/path/work/new-discussion.sqlite --reason '用户停止'
-python3 /absolute/path/agent-meet/scripts/chat.py export --room /absolute/path/work/new-discussion.sqlite --output /absolute/path/work/report.md
+python3 /absolute/path/agent-meet/scripts/consult.py status --room ROOM
+python3 /absolute/path/agent-meet/scripts/chat.py stop --room ROOM --reason '用户停止'
+python3 /absolute/path/agent-meet/scripts/chat.py export --room ROOM --output DISCUSSION_DIR/report.md
 ```
 
 默认 12 条普通消息（含简报）、10 分钟讨论、2 分钟结论审核、最多四次草案。
 单次 CLI 调用默认超时 180 秒，可用 `reply --turn-timeout` 设置为 1–600 秒。
 停止讨论会让正在执行的调用终止其 CLI。日志、请求缓存及 Claude 原生会话 ID 位于
-`ROOM.sqlite.consult/`，运行中调用的状态位于 `ROOM.sqlite.peers/`。
+`<ROOM>.consult/`，运行中调用的状态位于 `<ROOM>.peers/`。
 讨论目录应放在版本控制外；工具不会改写项目配置或用户登录信息。
 
 讨论通过各适配器限制项目写入能力，通信写入由 Python 工具处理。pi 禁用扩展及技能；
@@ -261,6 +300,7 @@ Windows 实机启动尚未验证。新增适配按上游接口并以模拟 CLI �
 - `SKILL.md`：当前主会话逐轮讨论的操作规约。
 - `scripts/consult.py`：默认前台逐轮调用和上下文简报。
 - `scripts/group.py`：可配置角色、轮次、并行回复及全体审核。
+- `scripts/storage.py`：按项目准备独立讨论目录及本地 Git 忽略规则。
 - `scripts/lifecycle.py`：结束前评估、原房间追加和旧结论历史边界。
 - `scripts/chat.py`：消息、草案、审核和导出。
 - `scripts/view.py`、`web/`：本地服务和群聊页面。

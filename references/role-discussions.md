@@ -37,13 +37,21 @@ Users can set everything in their initial natural-language instruction, e.g.:
 - Roles such as "user" are simulated perspectives; they are not actual customer
   research. Record real user input only when supplied by the user or evidence.
 
-No extra confirmation is needed for a clear request. Use a fresh room path,
+No extra confirmation is needed for a clear request. Use a fresh project-local discussion,
 keep the user's original scope, and tell them the roles, engines and round limit.
 
 ## Initialize
 
-Prepare the same eight-field context briefing described in SKILL.md. Then write
-a UTF-8 roles JSON. `examples/roles.json` contains the five roles above. Each role:
+Prepare a project-local directory as in SKILL.md, unless the user supplied a custom
+room. Skip this for continuation of an existing discussion:
+
+```bash
+python3 /path/to/agent-meet/scripts/storage.py prepare --cwd PROJECT --topic "SHORT_TOPIC"
+```
+
+Use the returned paths as `ROOM`, `BRIEFING_FILE`, `ROLES_FILE`, `DISCUSSION_DIR`.
+Write the same eight-field context briefing to BRIEFING_FILE, then write a UTF-8
+roles JSON to ROLES_FILE. `examples/roles.json` contains the five roles above. Each role:
 
 ```json
 {
@@ -63,15 +71,15 @@ for configurable two-person discussions. Supported additional roles: 1–8.
 
 ```bash
 python3 /path/to/agent-meet/scripts/group.py init \
-  --room /shared/new-group.sqlite --cwd /absolute/path/project \
-  --briefing-file /shared/briefing.json --roles-file /shared/roles.json \
+  --room ROOM --cwd PROJECT \
+  --briefing-file BRIEFING_FILE --roles-file ROLES_FILE \
   --main HOST --rounds 3 --minutes 30
-python3 /path/to/agent-meet/scripts/view.py start --room /shared/new-group.sqlite --open
+python3 /path/to/agent-meet/scripts/view.py start --room ROOM --open
 ```
 
 Set main identity to the actual host; the default title is `主持人`. Initialization validates all
 CLIs before creating the room, saves the configuration and opening briefing, but
-does not call any model. Exact repeated initialization is idempotent; changing
+does not call any model. Exact repeated initialization with the same explicit ROOM is idempotent; changing
 roles, project, briefing or round budget requires a fresh room. Do not rewrite
 roles in a running discussion or convert an older room in place.
 
@@ -79,7 +87,7 @@ roles in a running discussion or convert an older room in place.
 
 ```bash
 python3 /path/to/agent-meet/scripts/group.py round \
-  --room /shared/new-group.sqlite --request-id discussion-1
+  --room ROOM --request-id discussion-1
 ```
 
 This FOREGROUND tool execution calls every due role in parallel and returns their
@@ -100,10 +108,10 @@ constraints, identify contradictions, and ask roles to respond to one another:
 
 ```bash
 python3 /path/to/agent-meet/scripts/chat.py send \
-  --room /shared/new-group.sqlite --as HOST --request-id host-2 \
-  --text-file /shared/host-follow-up.txt
+  --room ROOM --as HOST --request-id host-2 \
+  --text-file DISCUSSION_DIR/host-follow-up.txt
 python3 /path/to/agent-meet/scripts/group.py round \
-  --room /shared/new-group.sqlite --request-id discussion-2
+  --room ROOM --request-id discussion-2
 ```
 
 Use unique request IDs. A successful or old batch retry returns existing records
@@ -129,10 +137,10 @@ Preserve disagreements and unknowns. Only the original host may propose.
 
 ```bash
 python3 /path/to/agent-meet/scripts/chat.py propose \
-  --room /shared/new-group.sqlite --as HOST --request-id host-conclusion-1 \
-  --file /shared/conclusion.json
+  --room ROOM --as HOST --request-id host-conclusion-1 \
+  --file DISCUSSION_DIR/conclusion.json
 python3 /path/to/agent-meet/scripts/group.py round \
-  --room /shared/new-group.sqlite --request-id review-1
+  --room ROOM --request-id review-1
 ```
 
 The same round command now asks every pending role to review this proposal.
@@ -153,4 +161,4 @@ model calls/account quota. Reaching the round cap stops new ordinary messages;
 the conclusion/review window remains. If time expires mid-round or a role cannot
 respond, report the partial record; never fabricate a finished round or approval.
 Stopping the room cancels active role CLIs. Logs and batch caches are in
-`ROOM.sqlite.group/`; role sessions and process state are in `ROOM.sqlite.peers/`.
+`<ROOM>.group/`; role sessions and process state are in `<ROOM>.peers/`.

@@ -127,3 +127,8 @@ Source references:
 - [pi JSON mode](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/json.md)
 - [OpenCode 1.x run](https://github.com/anomalyco/opencode/blob/v1.2.27/packages/opencode/src/cli/cmd/run.ts)
 - [OpenCode 2.x run](https://github.com/anomalyco/opencode/blob/dev/packages/cli/src/run/run.ts)
+
+New consult/group rooms default to `PROJECT/.agent-meet/UNIQUE_DISCUSSION/discussion.sqlite`
+when init omits `--room`. For skill workflows, use `storage.py prepare` first and
+keep all inputs in that discussion directory. Always use the returned explicit room
+for later commands; existing custom room paths remain valid and are not moved.

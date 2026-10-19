@@ -20,6 +20,7 @@ import chat
 import consult
 import peer
 import lifecycle
+import storage
 
 RULES = """You are ONE independent role in a multi-role discussion.
 Follow your_role.title and your_role.focus. Do not impersonate other participants.
@@ -200,6 +201,7 @@ def initialize(args):
         chat.fail("project directory does not exist")
     settings = {"mode": "group", "main": main, "roles": roles, "rounds": args.rounds,
                 "cwd": cwd, "briefing": briefing, "minutes": args.minutes}
+    args.room = storage.resolve_room(cwd, args.room, briefing["question"])
     root = directory(args.room)
     with peer.participant_lock(root):
         if Path(args.room).exists():
@@ -240,7 +242,7 @@ def status(room):
     for role in settings["roles"]:
         info = peer.read_status(peer.paths(room, role["id"]))
         workers[role["id"]] = {key: info[key] for key in ("state", "detail") if key in info}
-    return {"mode": "group", "status": current, "briefing": settings["briefing"],
+    return {"room": str(Path(room).resolve()), "mode": "group", "status": current, "briefing": settings["briefing"],
             "main": settings["main"]["id"], "roles": public_roles(settings), "workers": workers,
             "next_action": "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
             "finish or explicitly extend on the user's continuation request" if current["phase"] == "closed" else
@@ -422,7 +424,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "round", "status"):
         p = sub.add_parser(name)
-        p.add_argument("--room", required=True)
+        p.add_argument("--room", required=name != "init", help="discussion database; init defaults to PROJECT/.agent-meet/NEW_DISCUSSION/discussion.sqlite")
         if name == "init":
             p.add_argument("--cwd", required=True)
             p.add_argument("--briefing-file", required=True)

@@ -12,6 +12,7 @@ from pathlib import Path
 import chat
 import peer
 import lifecycle
+import storage
 
 BRIEF_STRINGS = ("question", "goal", "current_view")
 BRIEF_LISTS = ("constraints", "decisions", "rejected_options", "code_references", "unknowns")
@@ -81,17 +82,18 @@ def initialize(args):
     args.reviewer = args.reviewer or (args.backend if args.main != args.backend else args.backend + "-peer")
     briefing = load_briefing(args.briefing_file)
     opening = render_briefing(briefing)
-    root = directory(args.room)
     cwd = str(Path(args.cwd).resolve())
-    if (root / "config.json").exists():
+    if not Path(cwd).is_dir():
+        chat.fail("project directory does not exist")
+    if args.room and (directory(args.room) / "config.json").exists():
         config = configuration(args.room)
         if (config["briefing"], config["cwd"], config["main"], config["reviewer"], config.get("backend", "claude"), config.get("model")) != (
                 briefing, cwd, args.main, args.reviewer, args.backend, args.model):
             chat.fail("this consultation has different context or identities; choose a new room path")
         return {"already_initialized": True, **status(args.room)}
     peer.cli_prefix(args.cli, args.backend)
-    if not Path(cwd).is_dir():
-        chat.fail("project directory does not exist")
+    args.room = storage.resolve_room(cwd, args.room, briefing["question"])
+    root = directory(args.room)
     with peer.participant_lock(root):
         chat.create(argparse.Namespace(room=args.room, topic=briefing["question"],
                                        participants=[args.main, args.reviewer],
@@ -115,7 +117,7 @@ def initialize(args):
 def status(room):
     config = configuration(room)
     current, _ = snapshot(room, config)
-    return {"mode": "existing-main", "main": config["main"], "reviewer": config["reviewer"],
+    return {"room": str(Path(room).resolve()), "mode": "existing-main", "main": config["main"], "reviewer": config["reviewer"],
             "backend": config.get("backend", "claude"), "briefing_file": str(directory(room) / "briefing.md"), "briefing": config["briefing"],
             "model": model_state(room), "status": current,
             "next_action": "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
@@ -226,7 +228,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "reply", "status"):
         p = sub.add_parser(name)
-        p.add_argument("--room", required=True)
+        p.add_argument("--room", required=name != "init", help="discussion database; init defaults to PROJECT/.agent-meet/NEW_DISCUSSION/discussion.sqlite")
         if name == "init":
             p.add_argument("--cwd", required=True)
             p.add_argument("--briefing-file", required=True)
