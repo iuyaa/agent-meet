@@ -220,6 +220,8 @@ def model_response(args, directory, run_directory, info, prompt, turn):
             chat.fail("Codex returned an invalid structured response")
         if not isinstance(session, str) or not session or len(session) > 200 or session.startswith("-"):
             chat.fail("missing or invalid Codex thread ID in result")
+        if info.get("native_session_id") and session != info["native_session_id"]:
+            chat.fail("Codex resumed a different thread; refusing to silently replace context")
         info["native_session_id"] = session
         return result
     envelope = json.loads(output_path.read_text(encoding="utf-8-sig"))
@@ -233,6 +235,8 @@ def model_response(args, directory, run_directory, info, prompt, turn):
     session = envelope.get("session_id")
     if not isinstance(session, str) or not session or len(session) > 200 or session.startswith("-"):
         chat.fail("missing or invalid Claude session ID in result")
+    if info.get("native_session_id") and session != info["native_session_id"]:
+        chat.fail("Claude resumed a different session; refusing to silently replace context")
     info["native_session_id"] = session
     return result
 

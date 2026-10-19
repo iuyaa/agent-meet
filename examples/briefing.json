@@ -1,0 +1,10 @@
+{
+  "question": "这个项目第一版应使用 SQLite 还是 PostgreSQL？",
+  "goal": "在当前约束下确定第一版存储方案，并记录后续重新评估的条件。",
+  "current_view": "我倾向 SQLite，但希望你独立审查并发和后续迁移方面的假设。",
+  "constraints": ["第一版仅在同机使用。"],
+  "decisions": [],
+  "rejected_options": [],
+  "code_references": [],
+  "unknowns": ["实际写入负载尚未测量。"]
+}
