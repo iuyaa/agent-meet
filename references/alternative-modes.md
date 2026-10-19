@@ -12,7 +12,7 @@ Use only for an independent task where the supplied topic/briefing is sufficient
 and the user accepts that context boundary. Both CLIs must be installed/configured.
 
 ```bash
-python3 /path/to/agent-chat/scripts/discuss.py run --room /shared/independent.sqlite --cwd /project --topic-file /shared/question.txt
+python3 /path/to/agent-meet/scripts/discuss.py run --room /shared/independent.sqlite --cwd /project --topic-file /shared/question.txt
 ```
 
 `start` launches without waiting. `status` and `wait --timeout 25` inspect the job.
@@ -31,9 +31,9 @@ only when the user explicitly wants a persistent mailbox participant.
 Create a room with `chat.py create`, join and send as the main, then:
 
 ```bash
-python3 /path/to/agent-chat/scripts/peer.py start --room /shared/mailbox.sqlite --as claude --cwd /project
-python3 /path/to/agent-chat/scripts/peer.py status --room /shared/mailbox.sqlite --as claude
-python3 /path/to/agent-chat/scripts/peer.py stop --room /shared/mailbox.sqlite --as claude
+python3 /path/to/agent-meet/scripts/peer.py start --room /shared/mailbox.sqlite --as claude --cwd /project
+python3 /path/to/agent-meet/scripts/peer.py status --room /shared/mailbox.sqlite --as claude
+python3 /path/to/agent-meet/scripts/peer.py stop --room /shared/mailbox.sqlite --as claude
 ```
 
 `--backend codex` selects a Codex CLI peer. Read returned messages with

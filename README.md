@@ -1,9 +1,12 @@
-# Agent Chat · 保留当前会话的多角色讨论
+# Meet
+
+让不同 AI agent 在各自的上下文中交流、讨论和协作。
 
 在已经聊了很久的 Codex、Claude Code、pi 或 OpenCode 会话里，邀请其它 agent 讨论。
 **谁发起，谁保留当前会话和上下文、担任主持人。** 被邀请者逐轮回复，主持人结合原有背景
 追问、判断和总结；后续调用及追加讨论恢复各参与者原来的原生会话。
 
+v0.8.1 正式独立为 Meet，仓库与 skill 名称统一为 `agent-meet`，保持 v0.8 的功能与会话格式。
 v0.8 把主持人和调用后端分开，双人及多角色模式支持 Codex、Claude、pi、OpenCode。
 例如 Claude 主持、Codex 参与；pi 主持、OpenCode 参与；一个群混用四种 agent。
 角色默认仍使用 Claude，可逐角色指定其它后端。保留结束前评估、由用户决定追加、
@@ -15,22 +18,31 @@ Python 3.9+，仅用标准库。不依赖 Golutra。只有发起端需要此 ski
 
 ## 获取和更新
 
-[下载 v0.8.0 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.8.0.zip?raw=true)。
-解压后用其中的 `agent-chat` 文件夹替换已有 skill。
+[下载 v0.8.1 ZIP](https://github.com/iuyaa/agent-meet/raw/refs/heads/main/releases/agent-meet-v0.8.1.zip)。
+解压后将 `agent-meet` 文件夹放入宿主的 skill 目录，调用 `$agent-meet`。
+仓库根目录就是技能根目录，也可以直接克隆到所需安装位置：
+
+```bash
+git clone https://github.com/iuyaa/agent-meet.git /absolute/path/to/skills/agent-meet
+```
+
+从旧版 `agent-chat` 更新时，移除旧的技能目录并安装新目录，避免宿主同时加载两份技能。
+讨论数据库及其 `.consult`、`.group`、`.peers` 等目录放在技能目录以外，并完整保留。
+继续讨论时使用原房间路径，不要重新初始化。[迁移说明](MIGRATION.md) 包含历史来源与兼容边界。
 
 **保留原来的长会话。** 更新后让当前主持人重新读取更新后的 SKILL.md；
 不要为了加载新版本而新建一个没有历史的聊天。例如：
 
-> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.8 流程操作。
+> 重新读取 `/absolute/path/agent-meet/SKILL.md`，按 Meet v0.8.1 流程操作。
 > 保留你当前会话的上下文，和 Claude 讨论一下 glp-content 的 agent 应该怎么改。
 
 正常加载新版 skill 后，也可以继续使用：
 
-> $agent-chat 和 Claude 讨论一下，glp-content 的 agent 应该怎么改。
+> $agent-meet 和 Claude 讨论一下，glp-content 的 agent 应该怎么改。
 
-项目安装位置可使用 `.agents/skills/agent-chat/`（Codex）或
-`.claude/skills/agent-chat/`（Claude Code）、`.pi/skills/agent-chat/`（pi）、
-`.opencode/skills/agent-chat/`（OpenCode）。也可以直接指定任意位置的 SKILL.md。
+项目安装位置可使用 `.agents/skills/agent-meet/`（Codex）或
+`.claude/skills/agent-meet/`（Claude Code）、`.pi/skills/agent-meet/`（pi）、
+`.opencode/skills/agent-meet/`（OpenCode）。也可以直接指定任意位置的 SKILL.md。
 默认只需发起窗口能读取 skill；被调用的 agent 不需要再安装一份。
 
 如果已有旧版页面服务运行，更新后先用 `view.py close --room ...` 关闭页面服务，
@@ -41,7 +53,7 @@ Python 3.9+，仅用标准库。不依赖 Golutra。只有发起端需要此 ski
 
 可以直接在发起时用自然语言要求，不需要手写配置：
 
-> $agent-chat 讨论 glp-content 的 agent 改造方案，最多 3 轮。
+> $agent-meet 讨论 glp-content 的 agent 改造方案，最多 3 轮。
 > 由你主持，请产品经理、架构师、开发、用户、业务负责人五个角色参加。
 > 默认全部 Claude；架构师使用 Codex。最后给出共识、分歧和待验证问题。
 
@@ -87,8 +99,8 @@ v0.6 的已有房间也能原地使用，不用迁移或初始化新房间。
 若不追加，则保留并导出实际进展与未解决问题。
 
 ```bash
-python3 /absolute/path/agent-chat/scripts/chat.py assess --room /absolute/path/work/discussion.sqlite --as codex --request-id readiness-1 --file /absolute/path/work/assessment.json
-python3 /absolute/path/agent-chat/scripts/chat.py extend --room /absolute/path/work/discussion.sqlite --as codex --request-id approved-more-1 --rounds 2 --minutes 10 --reason '用户确认再讨论两轮，核对失败路径'
+python3 /absolute/path/agent-meet/scripts/chat.py assess --room /absolute/path/work/discussion.sqlite --as codex --request-id readiness-1 --file /absolute/path/work/assessment.json
+python3 /absolute/path/agent-meet/scripts/chat.py extend --room /absolute/path/work/discussion.sqlite --as codex --request-id approved-more-1 --rounds 2 --minutes 10 --reason '用户确认再讨论两轮，核对失败路径'
 ```
 
 `assess` 结构见 [examples/assessment.json](examples/assessment.json)。新建前台讨论在没有有效
@@ -104,9 +116,9 @@ python3 /absolute/path/agent-chat/scripts/chat.py extend --room /absolute/path/w
 主持人、角色、后端是三个独立设置：角色是职责，后端是运行这个角色的 agent，
 主持人是当前发起讨论的会话。常见请求可以这样写：
 
-> 在当前 Claude 会话使用 agent-chat，请 Codex 评审这个方案，保留当前上下文。
+> 在当前 Claude 会话使用 agent-meet，请 Codex 评审这个方案，保留当前上下文。
 >
-> 在当前 pi 会话使用 agent-chat，请产品经理用 Claude、架构师用 Codex、
+> 在当前 pi 会话使用 agent-meet，请产品经理用 Claude、架构师用 Codex、
 > 开发用 OpenCode 讨论三轮；你继续主持。
 
 双人初始化显式设置 `--main claude --backend codex` 即可反向调用；
@@ -140,9 +152,9 @@ python3 /absolute/path/agent-chat/scripts/chat.py extend --room /absolute/path/w
 八个字段都必须提供，不知道的列表可以为空，不应编造已有决策。
 
 ```bash
-python3 /absolute/path/agent-chat/scripts/consult.py init --room /absolute/path/work/new-discussion.sqlite --cwd /absolute/path/project --briefing-file /absolute/path/work/briefing.json --main codex --backend claude
-python3 /absolute/path/agent-chat/scripts/view.py start --room /absolute/path/work/new-discussion.sqlite --open
-python3 /absolute/path/agent-chat/scripts/consult.py reply --room /absolute/path/work/new-discussion.sqlite --request-id claude-1
+python3 /absolute/path/agent-meet/scripts/consult.py init --room /absolute/path/work/new-discussion.sqlite --cwd /absolute/path/project --briefing-file /absolute/path/work/briefing.json --main codex --backend claude
+python3 /absolute/path/agent-meet/scripts/view.py start --room /absolute/path/work/new-discussion.sqlite --open
+python3 /absolute/path/agent-meet/scripts/consult.py reply --room /absolute/path/work/new-discussion.sqlite --request-id claude-1
 ```
 
 `init` 自动加入双方身份，把简报记录为主参与者的第一条消息，暂不调用模型。
@@ -152,8 +164,8 @@ python3 /absolute/path/agent-chat/scripts/consult.py reply --room /absolute/path
 原主持人判断回复后，如需追问，先写好 UTF-8 消息文件，再执行：
 
 ```bash
-python3 /absolute/path/agent-chat/scripts/chat.py send --room /absolute/path/work/new-discussion.sqlite --as codex --request-id main-2 --text-file /absolute/path/work/follow-up.txt
-python3 /absolute/path/agent-chat/scripts/consult.py reply --room /absolute/path/work/new-discussion.sqlite --request-id claude-2
+python3 /absolute/path/agent-meet/scripts/chat.py send --room /absolute/path/work/new-discussion.sqlite --as codex --request-id main-2 --text-file /absolute/path/work/follow-up.txt
+python3 /absolute/path/agent-meet/scripts/consult.py reply --room /absolute/path/work/new-discussion.sqlite --request-id claude-2
 ```
 
 Claude 不在 PATH 时，初始化加 `--cli /absolute/path/to/claude`，传入可执行文件路径。
@@ -192,8 +204,8 @@ Windows 可用 `py -3` 替代 `python3`，路径含空格时加引号；原生 C
 讨论结束后页面仍可查看。关闭浏览器标签不停止讨论；关闭本地页面服务也不停止讨论：
 
 ```bash
-python3 /absolute/path/agent-chat/scripts/view.py status --room /absolute/path/work/new-discussion.sqlite
-python3 /absolute/path/agent-chat/scripts/view.py close --room /absolute/path/work/new-discussion.sqlite
+python3 /absolute/path/agent-meet/scripts/view.py status --room /absolute/path/work/new-discussion.sqlite
+python3 /absolute/path/agent-meet/scripts/view.py close --room /absolute/path/work/new-discussion.sqlite
 ```
 
 页面不是宿主 UI 的唤醒接口，不能给已经结束的 Codex Desktop 回合注入消息。
@@ -206,9 +218,9 @@ python3 /absolute/path/agent-chat/scripts/view.py close --room /absolute/path/wo
 审核未通过的草案不会被标为共识；超时、报错、无回复也不算同意。
 
 ```bash
-python3 /absolute/path/agent-chat/scripts/consult.py status --room /absolute/path/work/new-discussion.sqlite
-python3 /absolute/path/agent-chat/scripts/chat.py stop --room /absolute/path/work/new-discussion.sqlite --reason '用户停止'
-python3 /absolute/path/agent-chat/scripts/chat.py export --room /absolute/path/work/new-discussion.sqlite --output /absolute/path/work/report.md
+python3 /absolute/path/agent-meet/scripts/consult.py status --room /absolute/path/work/new-discussion.sqlite
+python3 /absolute/path/agent-meet/scripts/chat.py stop --room /absolute/path/work/new-discussion.sqlite --reason '用户停止'
+python3 /absolute/path/agent-meet/scripts/chat.py export --room /absolute/path/work/new-discussion.sqlite --output /absolute/path/work/report.md
 ```
 
 默认 12 条普通消息（含简报）、10 分钟讨论、2 分钟结论审核、最多四次草案。

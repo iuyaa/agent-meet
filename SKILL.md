@@ -1,9 +1,12 @@
 ---
-name: agent-chat
+name: agent-meet
 description: Discuss across Codex, Claude, pi and OpenCode, with any of them hosting from its current conversation. Configure roles and rounds, assess readiness before any draft, extend the same room on the user's decision and resume original native sessions. Show Markdown messages, folding, assessments and reviewed conclusions in a local page. Requires Python 3 and configured local role CLIs.
 ---
 
-# Agent Chat
+# Meet
+
+This skill is named `agent-meet` (formerly `agent-chat`). Keep existing discussion
+rooms and native session state when upgrading; see [migration](MIGRATION.md).
 
 **Default: YOU remain the main participant in this existing conversation.**
 Use `scripts/consult.py` to call one selected agent for ONE reply per foreground tool execution.
@@ -64,7 +67,7 @@ step: proceed with the already-authorized discussion.
 Choose a fresh room path outside version control, then initialize:
 
 ```bash
-python3 /path/to/agent-chat/scripts/consult.py init \
+python3 /path/to/agent-meet/scripts/consult.py init \
   --room /shared/new-discussion.sqlite --cwd /absolute/path/project \
   --briefing-file /shared/briefing.json --main HOST --backend PEER_BACKEND \
   --max-messages 12 --minutes 10
@@ -92,7 +95,7 @@ is idempotent; different context/project/identities require a fresh room.
 After initialization, start the viewer and try to open it in the local browser:
 
 ```bash
-python3 /path/to/agent-chat/scripts/view.py start \
+python3 /path/to/agent-meet/scripts/view.py start \
   --room /shared/new-discussion.sqlite --open
 ```
 
@@ -133,7 +136,7 @@ share it only with the user. Local state is stored in `ROOM.sqlite.view/`.
 ## 3. Call the invited agent and receive one reply
 
 ```bash
-python3 /path/to/agent-chat/scripts/consult.py reply \
+python3 /path/to/agent-meet/scripts/consult.py reply \
   --room /shared/new-discussion.sqlite --request-id peer-1
 ```
 
@@ -159,10 +162,10 @@ and provide missing facts. Do not accept a confident reply as proof of correctne
 For each follow-up, write your own message to a UTF-8 file, then:
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py send \
+python3 /path/to/agent-meet/scripts/chat.py send \
   --room /shared/new-discussion.sqlite --as HOST \
   --request-id main-2 --text-file /shared/follow-up.txt
-python3 /path/to/agent-chat/scripts/consult.py reply \
+python3 /path/to/agent-meet/scripts/consult.py reply \
   --room /shared/new-discussion.sqlite --request-id peer-2
 ```
 
@@ -199,7 +202,7 @@ the cap. New replies/reviews require a new assessment before another draft.
 Read the actual record before drafting the conclusion:
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py read --room /shared/new-discussion.sqlite --as HOST --after 0
+python3 /path/to/agent-meet/scripts/chat.py read --room /shared/new-discussion.sqlite --as HOST --after 0
 ```
 
 If `has_more` is true, continue from `next_after`. You are responsible for the
@@ -217,10 +220,10 @@ JSON using the exact schema below and real message IDs from BOTH authors:
 ```
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py propose \
+python3 /path/to/agent-meet/scripts/chat.py propose \
   --room /shared/new-discussion.sqlite --as HOST \
   --request-id main-conclusion-1 --file /shared/conclusion.json
-python3 /path/to/agent-chat/scripts/consult.py reply \
+python3 /path/to/agent-meet/scripts/consult.py reply \
   --room /shared/new-discussion.sqlite --request-id peer-review-1
 ```
 
@@ -232,7 +235,7 @@ if the message/time budget permits, or request an approved continuation. At most
 four rejected drafts, stop and export the differences rather than force agreement.
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py export \
+python3 /path/to/agent-meet/scripts/chat.py export \
   --room /shared/new-discussion.sqlite --output /shared/discussion-report.md
 ```
 
@@ -252,14 +255,14 @@ responses return an error to you without inventing a reply or agreement.
 Inspect consultation state and named local logs with:
 
 ```bash
-python3 /path/to/agent-chat/scripts/consult.py status --room /shared/new-discussion.sqlite
+python3 /path/to/agent-meet/scripts/consult.py status --room /shared/new-discussion.sqlite
 ```
 
 On a user stop request, close the room; an active foreground call checks it and
 stops its CLI process:
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py stop --room /shared/new-discussion.sqlite --reason '用户停止'
+python3 /path/to/agent-meet/scripts/chat.py stop --room /shared/new-discussion.sqlite --reason '用户停止'
 ```
 
 Keep discussion text in files rather than interpolating it into shell commands.

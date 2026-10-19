@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 const run = promisify(execFile);
 const python = process.env.PYTHON || 'python3';
 const scripts = path.resolve(__dirname, '../scripts');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-chat-group-ui-'));
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-meet-group-ui-'));
 const room = path.join(root, '五角色.sqlite');
 function args(script, action, rest) {
   return [path.join(scripts, script), action, '--room', room, ...rest];

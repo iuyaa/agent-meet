@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A local, dependency-free viewer for one Agent Chat discussion."""
+"""A local, dependency-free viewer for one Meet discussion."""
 
 import argparse
 import hmac
@@ -119,11 +119,11 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/api/health":
                 self.respond(200, {"ok": True, "pid": os.getpid()})
             elif self.path == "/api/export":
-                with tempfile.TemporaryDirectory(prefix="agent-chat-export-") as temp:
+                with tempfile.TemporaryDirectory(prefix="agent-meet-export-") as temp:
                     output = Path(temp) / "report.md"
                     chat.export(argparse.Namespace(room=self.server.room, output=output))
                     self.respond(200, output.read_bytes(), "text/markdown; charset=utf-8",
-                                 **{"Content-Disposition": 'attachment; filename="agent-chat-report.md"'})
+                                 **{"Content-Disposition": 'attachment; filename="agent-meet-report.md"'})
             elif self.path in ASSETS:
                 path = WEB / ASSETS[self.path]
                 mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"

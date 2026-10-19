@@ -20,10 +20,10 @@ extensions and proposals. The historical CLI default remains `codex` for compati
 For example, from an existing Claude conversation, after writing the briefing:
 
 ```bash
-python3 /path/to/agent-chat/scripts/consult.py init \
+python3 /path/to/agent-meet/scripts/consult.py init \
   --room /shared/review.sqlite --cwd /absolute/project \
   --briefing-file /shared/briefing.json --main claude --backend codex
-python3 /path/to/agent-chat/scripts/consult.py reply \
+python3 /path/to/agent-meet/scripts/consult.py reply \
   --room /shared/review.sqlite --request-id codex-1
 ```
 
@@ -51,8 +51,8 @@ role with `--main-title`/`--main-focus`, instead of creating an extra copy of it
 ## Discovery and installed tools
 
 Only the host needs the skill. Put it where that host discovers skills, for example
-`.agents/skills/agent-chat` (Codex), `.claude/skills/agent-chat` (Claude Code),
-`.pi/skills/agent-chat` (pi), or `.opencode/skills/agent-chat` (OpenCode).
+`.agents/skills/agent-meet` (Codex), `.claude/skills/agent-meet` (Claude Code),
+`.pi/skills/agent-meet` (pi), or `.opencode/skills/agent-meet` (OpenCode).
 Discovery differs by host/version; explicitly reading the absolute SKILL.md works
 when discovery is unavailable. Reading a skill cannot add file/command capabilities
 to a host that does not provide them.
@@ -72,7 +72,7 @@ The skill neither installs models nor changes login settings.
 | Claude | `-p`, JSON + structured schema | `--resume ID` | Read/Glob/Grep, no shell/edit/MCP |
 | Codex | `exec`, JSONL + output schema | `exec resume ID` | Read-only sandbox; no approval bypass |
 | pi | `--print --mode json`, stdin prompt | Explicit `--session` file and its header ID | read/grep/find/ls; extensions, skills and templates disabled; built-in MCP disabled when supported |
-| OpenCode | `run --format json`, stdin prompt | `--session ID` | Dedicated `agent-chat` agent with deny-by-default permissions; read/glob/grep/list allowed |
+| OpenCode | `run --format json`, stdin prompt | `--session ID` | Dedicated `agent-meet` agent with deny-by-default permissions; read/glob/grep/list allowed |
 
 Pi here means the **pi-mono coding agent**, now maintained at earendil-works/pi.
 The adapter uses JSON session headers and completed assistant messages; it does

@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 
 const python = process.env.PYTHON || 'python3';
 const scripts = path.resolve(__dirname, '../scripts');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-chat-browser-'));
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-meet-browser-'));
 let room = path.join(root, '演示 讨论.sqlite');
 function command(script, action, ...args) {
   return JSON.parse(

@@ -148,7 +148,7 @@ class PeerTests(unittest.TestCase):
         self.assertEqual(self.chat("status")["status"]["phase"], "discussing")
 
     def test_missing_cli_does_not_claim_join_or_request_invitation(self):
-        response = self.managed("start", "--cwd", self.project, "--cli", "agent-chat-no-such-cli", ok=False)
+        response = self.managed("start", "--cwd", self.project, "--cli", "agent-meet-no-such-cli", ok=False)
         self.assertIn("Claude CLI not found", response["error"])
         self.assertNotIn("claude", self.chat("status")["status"]["joined"])
 

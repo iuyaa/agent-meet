@@ -207,7 +207,7 @@ class OpenCode:
         readonly = {"*": "deny", "read": "allow", "glob": "allow", "grep": "allow", "list": "allow"}
         # A separate agent prevents built-in build/plan permissions overriding
         # the discussion tool allowlist. This is per-process, never saved globally.
-        agent = {"mode": "primary", "description": "Read-only Agent Chat participant", "permission": readonly}
+        agent = {"mode": "primary", "description": "Read-only Meet participant", "permission": readonly}
         overlay = {"agent": {"agent-chat": agent}, "permission": readonly, "share": "disabled"}
         environment = os.environ.copy()
         if environment.get("OPENCODE_CONFIG_CONTENT"):

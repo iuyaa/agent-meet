@@ -223,7 +223,10 @@ function message(event, data) {
   if (event.round_index) meta.append(node('span', '第 ' + event.round_index + ' 轮', 'round-tag'));
   const time = node(
     'time',
-    new Date(event.created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    new Date(event.created).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
     'time',
   );
   time.dateTime = event.created;
@@ -351,7 +354,7 @@ function render(data) {
   );
   const failed = Object.entries(data.workers || {}).filter(([, w]) => w.state === 'failed');
   $('topic').textContent = s.topic;
-  document.title = s.topic + ' · Agent Chat';
+  document.title = s.topic + ' · Meet';
   $('participants').textContent = s.participants.map(display).join('  +  ');
   $('participant-count').textContent =
     '／ ' + String(s.participants.length).padStart(2, '0') + ' PARTICIPANTS';
@@ -649,7 +652,7 @@ $('export').addEventListener('click', async () => {
     const url = URL.createObjectURL(blob);
     const a = node('a');
     a.href = url;
-    a.download = 'agent-chat-report.md';
+    a.download = 'agent-meet-report.md';
     document.body.append(a);
     a.click();
     a.remove();

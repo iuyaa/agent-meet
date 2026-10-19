@@ -6,6 +6,15 @@
 保留主会话的前台调用 9 项、单参与者 9 项、双边托管及 Codex 包装脚本 7 项、
 本地页面服务 8 项、多角色协议及并行调用 15 项、续聊与结束前评估 14 项、跨 agent 调用适配 12 项。
 
+v0.8.1 独立项目与 Meet 命名验证：
+
+- 原技能的九次提交已提取到独立仓库根目录；逐个比较 Git tree，文件树与原目录完全相同。
+- 独立目录执行全部 88 项测试与两套 Chromium 检查；不存在对 Golutra 应用代码或资源的运行依赖。
+- 页面品牌改为 Meet，skill 名称为 agent-meet，新导出名称为 agent-meet-report.md。
+- 用旧 v0.8 工具建立房间并调用一次 pi 模拟 CLI，使用 Meet 关闭旧页面服务、追加原预算并继续回复；
+  原生 ID、原会话文件及全部消息保持不变，无新建房间或角色。原生 CLI 实际模型未调用。
+- 保留 SQLite、状态目录、浏览器存储键与 OpenCode 内部 agent 标识；旧包保持历史归档。
+
 v0.8 跨 agent 主持与调用验证：
 
 - Claude 主持并邀请 Codex，追问时恢复同一个 Codex ID，没有新建替代主持人。
@@ -50,7 +59,7 @@ v0.6 多角色及折叠验证：
   多角色导出、隐私字段不出现在接口、390px 窄屏与无 JavaScript 错误。
 
 ```bash
-CHROMIUM=/path/to/chromium node tests/browser_group.cjs /tmp/agent-chat-group-preview.png
+CHROMIUM=/path/to/chromium node tests/browser_group.cjs /tmp/agent-meet-group-preview.png
 ```
 
 五角色截图 `examples/group-preview.png` 来自该浏览器测试，消息由模拟 CLI 生成，未调用真实模型。
@@ -81,7 +90,7 @@ v0.5 本地页面验证：
 可选复现浏览器检查（需要开发环境已有 `playwright` 包及 Chromium；运行 skill 不需要）：
 
 ```bash
-CHROMIUM=/path/to/chromium node tests/browser_view.cjs /tmp/agent-chat-preview.png
+CHROMIUM=/path/to/chromium node tests/browser_view.cjs /tmp/agent-meet-preview.png
 ```
 
 `examples/chat-preview.png` 来自上述浏览器检查。所有界面测试消息均为预先编写的演示数据，

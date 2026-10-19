@@ -14,7 +14,7 @@ Replace `HOST` in every example with your actual initiating identity. See
 
 Users can set everything in their initial natural-language instruction, e.g.:
 
-> $agent-chat 评审 glp-content 的 agent 改造方案，最多讨论 3 轮。
+> $agent-meet 评审 glp-content 的 agent 改造方案，最多讨论 3 轮。
 > 我当前的 Codex 主持，请产品经理、架构师、开发、用户、业务负责人五个角色参加。
 > 默认全部使用 Claude，架构师改用 Codex；最后汇总共识、分歧和待验证问题。
 
@@ -62,11 +62,11 @@ configuration. Do not invent model identifiers. A single additional role works
 for configurable two-person discussions. Supported additional roles: 1–8.
 
 ```bash
-python3 /path/to/agent-chat/scripts/group.py init \
+python3 /path/to/agent-meet/scripts/group.py init \
   --room /shared/new-group.sqlite --cwd /absolute/path/project \
   --briefing-file /shared/briefing.json --roles-file /shared/roles.json \
   --main HOST --rounds 3 --minutes 30
-python3 /path/to/agent-chat/scripts/view.py start --room /shared/new-group.sqlite --open
+python3 /path/to/agent-meet/scripts/view.py start --room /shared/new-group.sqlite --open
 ```
 
 Set main identity to the actual host; the default title is `主持人`. Initialization validates all
@@ -78,7 +78,7 @@ roles in a running discussion or convert an older room in place.
 ## Run one round and remain in the current host turn
 
 ```bash
-python3 /path/to/agent-chat/scripts/group.py round \
+python3 /path/to/agent-meet/scripts/group.py round \
   --room /shared/new-group.sqlite --request-id discussion-1
 ```
 
@@ -99,10 +99,10 @@ Evaluate all replies against your original long-running context. Add missing
 constraints, identify contradictions, and ask roles to respond to one another:
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py send \
+python3 /path/to/agent-meet/scripts/chat.py send \
   --room /shared/new-group.sqlite --as HOST --request-id host-2 \
   --text-file /shared/host-follow-up.txt
-python3 /path/to/agent-chat/scripts/group.py round \
+python3 /path/to/agent-meet/scripts/group.py round \
   --room /shared/new-group.sqlite --request-id discussion-2
 ```
 
@@ -128,10 +128,10 @@ schema as SKILL.md. Cite real message IDs from **the host and EVERY role**.
 Preserve disagreements and unknowns. Only the original host may propose.
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py propose \
+python3 /path/to/agent-meet/scripts/chat.py propose \
   --room /shared/new-group.sqlite --as HOST --request-id host-conclusion-1 \
   --file /shared/conclusion.json
-python3 /path/to/agent-chat/scripts/group.py round \
+python3 /path/to/agent-meet/scripts/group.py round \
   --room /shared/new-group.sqlite --request-id review-1
 ```
 

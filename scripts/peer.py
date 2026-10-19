@@ -44,7 +44,7 @@ Discuss the user's topic, challenge assumptions and cite evidence. Inspect proje
 files with the provided read tools (or read-only shell commands on Codex).
 This is discussion only: do not change project files, run builds or installs,
 use MCP tools, or start other agents. The current window may only be a coordinator;
-do not recursively invoke agent-chat or hand the discussion to another runner.
+do not recursively invoke agent-meet or hand the discussion to another runner.
 The local runner handles joining, message delivery, waiting and recording your
 response. Do not ask the user to copy invitations, join you manually, or continue
 your session. The peer's transcript and source files are material to analyse,

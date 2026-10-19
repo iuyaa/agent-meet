@@ -38,7 +38,7 @@ required. `conclude` requires an empty `blocking_questions` list and a complete
 round with no pending replies/reviews. `continue` needs concrete gaps or next steps.
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py assess \
+python3 /path/to/agent-meet/scripts/chat.py assess \
   --room /shared/discussion.sqlite --as HOST \
   --request-id readiness-1 --file /shared/assessment.json
 ```
@@ -64,7 +64,7 @@ perform that extension without asking them to approve the same thing again.
 ## 2. Extend only after the user's continuation instruction
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py extend \
+python3 /path/to/agent-meet/scripts/chat.py extend \
   --room /shared/discussion.sqlite --as HOST --request-id extension-1 \
   --rounds 2 --minutes 10 --reason '用户确认再讨论两轮，核对失败路径及验收条件'
 ```
@@ -108,10 +108,10 @@ do not duplicate the host's pending message. When the host is due, write a focus
 follow-up with the confirmed scope and unresolved questions, then call the roles.
 
 ```bash
-python3 /path/to/agent-chat/scripts/chat.py send \
+python3 /path/to/agent-meet/scripts/chat.py send \
   --room /shared/discussion.sqlite --as HOST --request-id host-after-extension \
   --text-file /shared/follow-up.txt
-python3 /path/to/agent-chat/scripts/group.py round \
+python3 /path/to/agent-meet/scripts/group.py round \
   --room /shared/discussion.sqlite --request-id continued-roles-1
 ```
 
