@@ -1,16 +1,21 @@
 ---
 name: agent-chat
-description: Discuss a user-specified question with one other independent agent in a shared local discussion. Use when the user asks Codex, Claude Code, or another agent to exchange views, challenge assumptions, and record conclusions together. Requires Python 3 and a shared local filesystem.
+description: Discuss a question with another agent, automatically starting a new Claude Code participant when requested. Exchange views, challenge assumptions, and record reviewed conclusions without copying invitations. Requires Python 3 and a shared local filesystem; automatic Claude participation also needs a working local Claude CLI.
 ---
 
 # Agent Chat
 
-Use the bundled `scripts/chat.py` to participate in a two-agent discussion. This
-skill does not start models. The user opens both agent sessions and tells each
-one to use this skill. Both sessions need shell access to the same local SQLite
-file. Keep each session active while waiting. No Golutra, API key, network,
-Python package installation, or daemon is needed for the communication tool.
-The host agents still use their own existing model access.
+Use `scripts/chat.py` for the discussion and `scripts/peer.py` to automatically
+start a new Claude participant. When the user says "discuss this with Claude",
+use automatic startup by default. The user should not have to copy an invitation
+or install this skill separately for the managed Claude participant.
+
+The local Claude CLI must already be installed and authenticated/configured.
+It uses its existing model configuration and access; do not change credentials
+or model selection. The CLI uses its usual model service. Local message transport
+itself needs only Python's standard library and a shared local SQLite file.
+No Golutra or always-on service is required. Keep the initiating agent active
+until the discussion closes or a concrete error needs the user's intervention.
 
 ## Identify the discussion
 
@@ -25,7 +30,9 @@ The two identities can be `codex` and `claude`, or any distinct names. Do not
 assume tool/model names are the identities. Two Codex sessions can discuss as
 `codex-a` and `codex-b`. Never send messages using the other identity.
 
-If no discussion exists, the initiating agent creates one:
+If the user did not specify a room path, create a fresh discussion at an absolute
+path outside version control. Do not silently reuse an old expired room from
+earlier chats:
 
 ```bash
 python3 /path/to/agent-chat/scripts/chat.py create \
@@ -37,11 +44,10 @@ python3 /path/to/agent-chat/scripts/chat.py create \
 The first participant opens the discussion and normally drafts the conclusion.
 The second participant challenges and reviews it. Both can ask questions and
 propose conclusions. These are turn-taking defaults, not a hierarchy.
-The creator gets the room path in the JSON response. Give the user one short
-invitation to paste into the other session: read this SKILL.md, join this exact
-room path as the second identity, and participate until the discussion closes.
-This is a one-time introduction; the tool carries all subsequent messages.
-If the other session is already connected, no invitation is necessary.
+The creator gets the room path in the JSON response. For a new Claude participant,
+join as the initiating identity, send your opening view, then start Claude using
+the automatic startup section below. Do not end your turn with an invitation or
+ask the user to open Claude manually when automatic startup is available.
 
 Join, then read the record:
 
@@ -54,6 +60,59 @@ Joining is idempotent. After a host restart, join under the same identity and
 read from 0 to restore context. Joining does not recover the host model's native
 session. Use only one active host session per identity.
 
+## Automatically start Claude
+
+After creating/joining the discussion and sending the opening message, run:
+
+```bash
+python3 /path/to/agent-chat/scripts/peer.py start \
+  --room /shared/discussion.sqlite --as claude --cwd /absolute/path/to/project
+```
+
+`--as` is the other identity, not your own. `--cwd` is the project under discussion,
+not the skill installation directory. If Claude is not on PATH, add
+`--cli /absolute/path/to/claude`. Pass an executable path, not a shell command.
+Windows native Claude executables and standard npm Claude wrappers are supported;
+an npm wrapper is resolved to its Node entry point to avoid batch quoting issues.
+
+The background runner joins under the selected identity, waits for its turn,
+calls `claude -p` for a structured response, and records the resulting message
+or conclusion review. Subsequent calls resume the returned native Claude session.
+Claude can inspect the project using Read/Glob/Grep; shell, edit and MCP tools
+are not enabled for this discussion adapter. The runner carries the protocol
+instructions and transcript, so Claude does not need a separate skill installation.
+It never connects to an already-open Claude window.
+
+Successful startup means the runner joined, not that model authentication or a
+response has succeeded. **Continue with read/wait and actual discussion; do not
+finish the current turn just because startup returned.** When waiting times out,
+check the managed participant:
+
+```bash
+python3 /path/to/agent-chat/scripts/peer.py status --room /shared/discussion.sqlite --as claude
+```
+
+`waiting` is normal between turns; `thinking` means the CLI is running.
+If status is `failed`, inspect the stated local log path, explain the concrete
+error, and stop waiting blindly. Missing CLI, missing authentication, unsupported
+CLI flags, permission denials and malformed responses are errors, not agreement.
+Do not silently switch to copy/paste invitations; report the actual blocker.
+If startup reports `already_running`, use the existing managed participant.
+
+Status and per-turn logs are stored next to the database in `ROOM.sqlite.peers/`.
+One OS lock per room/identity prevents duplicate managed participants. Closing
+the discussion also stops the runner and any currently running CLI invocation.
+To stop only the managed participant, leaving the room available:
+
+```bash
+python3 /path/to/agent-chat/scripts/peer.py stop --room /shared/discussion.sqlite --as claude
+```
+
+If the user explicitly wants an already-open agent window, or the peer is not
+Claude Code, use manual joining: give that session the SKILL.md path, exact room
+path and distinct identity once. Current automatic startup supports Claude Code
+only; do not claim to control existing windows or start other backends.
+
 ## Exchange views
 
 1. Read `status.topic` and existing events. Keep `next_after` as your read cursor.
@@ -64,7 +123,8 @@ session. Use only one active host session per identity.
 3. If `next_action` is `wait`, use `wait --after CURSOR --timeout 25`. Read the
    returned events, save `next_after`, and respond when appropriate. A timeout
    is normal; it does not mean the other participant has replied or left.
-   Continue waiting within the discussion's time limit, yielding progress to
+   Check `peer.py status` on timeouts when using automatic startup. Continue
+   waiting within the discussion's time limit, yielding progress to
    the user between waits if necessary. If the host requires a resumed shell
    tool/session to obtain output, wait for its completion before continuing.
 4. If the phase is `summarizing`, stop regular messages. The first participant

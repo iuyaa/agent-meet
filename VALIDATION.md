@@ -2,7 +2,8 @@
 
 运行环境：Linux、Python 3.12；工具仅使用 Python 标准库。
 
-执行 `python3 -m unittest discover -s tests -v`：14 项测试通过。
+执行 `python3 -m unittest discover -s tests -v`：23 项测试通过，其中原通信协议 14 项、
+自动 Claude 参与者 9 项。
 
 覆盖了：
 
@@ -18,10 +19,23 @@
 - 中文及含空格路径、多行文本、shell 元字符原样往返。
 - 现有数据库和导出文件不会被覆盖。
 
+自动接入测试使用独立的模拟 Claude CLI 可执行文件，覆盖：
+
+- 无需邀请语，后台进程自动加入、收到开场消息后回复。
+- 后续回合使用 CLI 返回的原生 session ID 恢复会话。
+- 自动审核结论后结束，完整记录可导出。
+- 重复启动返回现有参与者，不重复启动模型。
+- 找不到 CLI 时明确失败，不虚报加入。
+- 无法写入运行目录时明确报错，不误报为已有参与者运行。
+- CLI 非零退出、非 JSON 响应、缺失结构化结果、权限拒绝、错误动作均明确失败。
+- 停止讨论会取消正在运行的 CLI，模型单轮超时也会结束并报告。
+- Windows npm 包装脚本解析为 Node 入口，避免 batch/shell 解释参数。
+
 执行 `python3 examples/two_process_demo.py --output ...`：两个独立 Python
 进程完成四条消息、一个结论草案及一次对方确认，导出六条事件的完整报告。
 
 **该演示使用预先编写的消息，没有调用任何模型。** 当前环境有 Codex CLI，
 未安装 Claude Code CLI，因此尚未完成真实 Codex ↔ Claude Code 的端到端联调。
-Windows、macOS 和各宿主的原生 skill 自动发现流程也未在当前环境验证。
-请使用 README 中的双窗口提示词做真实模型验证。
+Windows 的实际进程创建、macOS 和各宿主的原生 skill 自动发现流程也未在当前环境验证。
+Windows npm 路径解析有模拟测试，但不能替代 Windows 实机验证。
+请使用 README 中的自动启动流程做真实模型验证。
