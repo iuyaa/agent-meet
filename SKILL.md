@@ -1,12 +1,16 @@
 ---
 name: agent-chat
-description: Let the current Codex or other main agent discuss a question with Claude while keeping its existing conversation context. Show the real discussion in a local chat page, prepare a context briefing, call Claude once per foreground tool execution, resume the same Claude session for follow-ups, and record reviewed conclusions. Requires Python 3 and a configured local Claude CLI. New background main sessions are opt-in only.
+description: Discuss with Claude or multiple named roles while preserving the current main conversation. Configure rounds, role focus and Claude/Codex backends; resume each role's independent native session, show Markdown messages with folding in a local chat page, and record reviewed conclusions. Requires Python 3 and configured local role CLIs. Replacement main/background sessions are opt-in only.
 ---
 
 # Agent Chat
 
 **Default: YOU remain the main participant in this existing conversation.**
 Use `scripts/consult.py` to call Claude for ONE reply per foreground tool execution.
+When the user specifies roles, multiple participants, or a number of rounds,
+use `scripts/group.py` instead. Read [role discussions](references/role-discussions.md)
+and follow its initialization/round/review commands. Do not initialize consult.py
+first or launch the optional two-agent background mode for this request.
 Interpret that reply using your current long-running context, then follow up or
 conclude. Do not start a replacement Codex, hand the main identity to a background
 runner, or use `discuss.py`/`peer.py start` by default.
@@ -15,6 +19,8 @@ Only the initiating host needs this skill. The local Claude CLI must already be
 installed and configured; use its existing account and model selection. No
 additional Codex CLI is required for this flow, even in Codex Desktop.
 The Python tools need only the standard library. No Golutra is required.
+Additional roles default to Claude; each may explicitly use Codex and needs its
+configured local CLI. The existing main remains the host in both modes.
 
 ## 1. Capture the relevant current context
 
@@ -87,6 +93,8 @@ conclusions render Markdown (including code and tables) using bundled local
 browser libraries. Exports preserve the original source text. It polls once per
 second; messages appear when the complete response is recorded, not as a fabricated
 typing stream. It does not expose private reasoning or the original full chat.
+Each message can be folded. Long messages start folded; individual and global
+expand/collapse choices persist across updates and refreshes in this browser tab.
 Its Stop button closes the discussion and cancels an active CLI call. If stopped,
 respect that state, export what exists and finish; do not automatically reopen or
 retry. Export downloads a Markdown snapshot with its actual confirmation status.

@@ -103,6 +103,15 @@ let browser;
     ].join('\n'),
   );
   await page.waitForSelector('#event-2');
+  assert.equal(
+    await page.locator('#event-2 .message-toggle').getAttribute('aria-expanded'),
+    'false',
+  );
+  await page.locator('#event-2 .message-toggle').click();
+  assert.equal(
+    await page.locator('#event-2 .message-toggle').getAttribute('aria-expanded'),
+    'true',
+  );
   const rendered = page.locator('#event-2 .markdown');
   assert.equal(await rendered.locator('h2').innerText(), '把讨论过程展示清楚');
   assert.equal(await rendered.locator('strong').innerText(), '建议');
@@ -129,12 +138,21 @@ let browser;
     '这个范围足够第一版使用。停止操作应取消正在执行的调用；导出时保留完整原话和审核状态。\n\n建议先验证真实记录的实时更新，再考虑页面内发起新问题。',
   );
   await page.waitForSelector('#event-4');
+  // A user's fold choices survive new events, polls and page reloads.
+  await page.locator('#event-3 .message-toggle').click();
+  assert.equal(await page.locator('#event-3 .message-body').isVisible(), false);
   if (process.argv[2])
     await page.screenshot({ path: path.resolve(process.argv[2]), fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.locator('#event-4 .event-id').click();
   await page.reload(); // An evidence anchor must never replace the stored authentication token.
   await page.waitForSelector('#event-4');
+  assert.equal(await page.locator('#event-3 .message-body').isVisible(), false);
+  await page.locator('#expand-all').click();
+  assert.equal(await page.locator('#event-3 .message-body').isVisible(), true);
+  await page.locator('#collapse-all').click();
+  assert.equal(await page.locator('#event-2 .message-body').isVisible(), false);
+  await page.locator('#expand-all').click();
   const unsafe = [
     '<img src=x onerror="window.__injected=1">',
     '<script>window.__injected=2</script>',

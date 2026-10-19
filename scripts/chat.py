@@ -12,6 +12,11 @@ import sys
 import time
 from pathlib import Path
 
+# The CLI also serves as a library for the group protocol. Share its exception
+# class when invoked as a script instead of importing a second copy of chat.
+if __name__ == "__main__":
+    sys.modules["chat"] = sys.modules[__name__]
+
 VERSION = 1
 MAX_TEXT = 24000
 SCHEMA = """
@@ -63,7 +68,7 @@ def database(path, write=False):
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
         row = conn.execute("SELECT * FROM room WHERE singleton = 1").fetchone()
-        if not row or row["version"] != VERSION:
+        if not row or row["version"] not in (VERSION, 2):
             fail("unsupported discussion format")
         yield conn
         conn.commit()
@@ -84,6 +89,9 @@ def event(row):
 
 def state(conn):
     room = dict(conn.execute("SELECT * FROM room").fetchone())
+    if room["version"] == 2:
+        import group
+        return group.state(conn, room)
     names = json.loads(room["participants"])
     joined = [r[0] for r in conn.execute("SELECT name FROM members ORDER BY joined, name")]
     count = conn.execute("SELECT COUNT(*) FROM events WHERE kind = 'message'").fetchone()[0]
@@ -120,12 +128,20 @@ def state(conn):
 
 def identity(conn, name):
     if name not in json.loads(conn.execute("SELECT participants FROM room").fetchone()[0]):
-        fail("identity is not one of the two participants")
+        fail("identity is not a discussion participant")
     if not conn.execute("SELECT 1 FROM members WHERE name = ?", (name,)).fetchone():
         fail("join with this identity first")
 
 
 def next_action(status, name):
+    if status.get("mode") == "group":
+        if status["phase"] == "closed":
+            return "export"
+        if status["pending_reviewers"]:
+            return "review" if name in status["pending_reviewers"] else "wait"
+        if status["pending_speakers"]:
+            return "send" if name in status["pending_speakers"] else "wait"
+        return "send_or_propose" if name == status["main"] else "wait"
     if status["phase"] == "closed":
         return "export"
     proposal = status["latest_proposal"]
@@ -169,7 +185,7 @@ def join(args):
     with database(args.room, write=True) as conn:
         status = state(conn)
         if args.agent not in status["participants"]:
-            fail("identity is not one of the two participants")
+            fail("identity is not a discussion participant")
         if status["phase"] == "closed":
             fail("discussion is closed")
         conn.execute("INSERT OR IGNORE INTO members VALUES (?, ?)", (args.agent, time.time()))
@@ -205,7 +221,7 @@ def proposal_body(conn, args):
         authors.add(row["sender"])
     names = set(json.loads(conn.execute("SELECT participants FROM room").fetchone()[0]))
     if authors != names:
-        fail("a proposal needs evidence from both participants")
+        fail("a proposal needs evidence from all participants")
     return nonempty(json.dumps(data, ensure_ascii=False), "proposal")
 
 
@@ -213,6 +229,9 @@ def append(args):
     kind = {"send": "message", "propose": "proposal", "review": "review"}[args.command]
     request_id = nonempty(args.request_id, "request-id")
     with database(args.room, write=True) as conn:
+        if conn.execute("SELECT version FROM room").fetchone()[0] == 2:
+            import group
+            return group.append(conn, args)
         identity(conn, args.agent)
         reply_to = getattr(args, "reply_to", None)
         if kind == "message":
@@ -305,12 +324,20 @@ def export(args):
     with database(args.room) as conn:
         status = state(conn)
         events = [event(row) for row in conn.execute("SELECT * FROM events ORDER BY id")]
-    lines = ["# 双 Agent 讨论记录", "", "## 讨论问题", "", status["topic"], "",
+    is_group = status.get("mode") == "group"
+    lines = ["# " + ("多角色" if is_group else "双 Agent") + "讨论记录", "", "## 讨论问题", "", status["topic"], "",
              "参与者：" + ", ".join(status["participants"]),
              "阶段：" + status["phase"], "结束原因：" + str(status["close_reason"] or "尚未结束"), ""]
     proposal = status["latest_proposal"]
     labels = {"none": "尚无结论", "unconfirmed": "单方草案，尚未得到另一方确认",
               "confirmed": "双方已确认（可包含已确认保留的分歧）", "disputed": "另一方提出异议，尚未确认"}
+    if is_group:
+        labels.update(unconfirmed="草案，尚未得到全部角色确认", confirmed="全部角色已确认记录（可保留分歧）",
+                      disputed="有角色提出异议，尚未全体确认")
+        lines += [f"轮次：{status['completed_rounds']} / {status['max_rounds']} 轮完成", "", "## 角色", ""]
+        for role in status["roles"]:
+            lines += [f"- {role['id']}：{role['title']} · {role['backend']}；{role['focus']}"]
+        lines += ["", "审核进度：" + str(len(status["reviews"])) + " / " + str(len(status["roles"]) - 1), ""]
     lines.extend(["## 讨论结果", "", labels[status["conclusion_status"]], ""])
     if proposal:
         body = proposal["body"]
@@ -321,7 +348,8 @@ def export(args):
     lines.extend(["## 完整记录", ""])
     for item in events:
         content = item["body"] if isinstance(item["body"], str) else json.dumps(item["body"], ensure_ascii=False, indent=2)
-        lines.extend([f"### #{item['id']} {item['sender']} · {item['kind']} · {item['created']}", "", content, ""])
+        round_label = f" · 第 {item['round_index']} 轮" if is_group else ""
+        lines.extend([f"### #{item['id']} {item['sender']} · {item['kind']}{round_label} · {item['created']}", "", content, ""])
     output = Path(args.output).resolve()
     if output == Path(args.room).resolve():
         fail("export path cannot be the discussion database")

@@ -1,0 +1,7 @@
+[
+  {"id": "product", "title": "产品经理", "focus": "明确需求价值、使用场景、优先级和验收标准", "backend": "claude"},
+  {"id": "architect", "title": "架构师", "focus": "审视系统边界、技术方案、长期维护成本和方案取舍", "backend": "claude"},
+  {"id": "developer", "title": "开发", "focus": "结合代码证据评估实现难度、兼容性、测试和实施顺序", "backend": "claude"},
+  {"id": "user", "title": "用户", "focus": "从使用者角度评估操作流程、学习成本和实际体验；这是模拟视角，不编造用户调研", "backend": "claude"},
+  {"id": "business", "title": "业务负责人", "focus": "评估业务目标、投入产出、交付风险及成功指标", "backend": "claude"}
+]

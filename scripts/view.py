@@ -20,6 +20,7 @@ from pathlib import Path
 
 import chat
 import consult
+import group
 import peer
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -43,6 +44,15 @@ def snapshot(room):
     with chat.database(room) as conn:
         status = chat.state(conn)
         events = [chat.event(row) for row in conn.execute("SELECT * FROM events ORDER BY id")]
+        if status.get("mode") == "group":
+            settings = group.config(conn)
+            workers = {}
+            for role in settings["roles"]:
+                info = peer.read_status(peer.paths(room, role["id"]))
+                workers[role["id"]] = {key: info[key] for key in ("state", "detail") if key in info}
+            return {"status": status, "events": events, "briefing": settings["briefing"],
+                    "main": settings["main"]["id"], "reviewer": None, "roles": status["roles"],
+                    "workers": workers, "model": {}, "worker": {}}
     config = read_json(consult.directory(room) / "config.json")
     model = read_json(consult.directory(room) / "status.json")
     reviewer = config.get("reviewer", status["participants"][1])

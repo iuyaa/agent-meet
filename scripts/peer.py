@@ -139,7 +139,7 @@ def snapshot(args):
         status = chat.state(conn)
         events = [chat.event(row) for row in conn.execute("SELECT * FROM events ORDER BY id")]
     if args.agent not in status["participants"]:
-        chat.fail("identity is not one of the two participants")
+        chat.fail("identity is not a discussion participant")
     return status, events
 
 
@@ -165,6 +165,8 @@ def model_response(args, directory, run_directory, info, prompt, turn):
                             "--tools", "Read,Glob,Grep", "--allowedTools", "Read,Glob,Grep",
                             "--permission-mode", "dontAsk", "--strict-mcp-config", "--mcp-config",
                             '{"mcpServers":{}}', "--max-turns", "12"]
+        if getattr(args, "model", None):
+            command += ["--model", args.model]
         if info.get("native_session_id"):
             command += ["--resume", info["native_session_id"]]
     else:
@@ -174,6 +176,8 @@ def model_response(args, directory, run_directory, info, prompt, turn):
         # runner; the model gets a read-only sandbox and no approval bypass.
         command = prefix + ["exec", "--sandbox", "read-only", "--cd", args.cwd,
                             "-c", 'approval_policy="never"']
+        if getattr(args, "model", None):
+            command += ["--model", args.model]
         if info.get("native_session_id"):
             command += ["resume"]
         command += ["--json", "--skip-git-repo-check", "--output-schema", str(schema_path),

@@ -25,7 +25,9 @@
     <main class="layout">
       <section class="conversation" aria-labelledby="topic">
         <div class="room-heading">
-          <div class="eyebrow">DISCUSSION ROOM <span>／ 02 PARTICIPANTS</span></div>
+          <div class="eyebrow">
+            DISCUSSION ROOM <span id="participant-count">／ 02 PARTICIPANTS</span>
+          </div>
           <h1 id="topic">正在打开讨论…</h1>
           <div class="room-meta">
             <span id="participants"></span><span class="separator">·</span><span id="count"></span
@@ -33,6 +35,10 @@
           </div>
         </div>
         <div id="notice" class="notice" role="status" hidden></div>
+        <div class="message-tools">
+          <span id="round-progress"></span><button id="expand-all">全部展开</button
+          ><button id="collapse-all">全部折叠</button>
+        </div>
         <div id="messages" class="messages" aria-label="讨论消息"></div>
         <div id="activity" class="activity" role="status"></div>
         <footer class="compose-hint">
@@ -44,6 +50,13 @@
         </footer>
       </section>
       <aside class="sidebar" aria-label="讨论背景和结论">
+        <section id="roles-panel" class="panel" hidden>
+          <div class="panel-heading">
+            <h2>参与角色</h2>
+            <span class="tiny-label">ROLES</span>
+          </div>
+          <div id="roles-list"></div>
+        </section>
         <section class="panel">
           <div class="panel-heading">
             <h2>上下文简报</h2>

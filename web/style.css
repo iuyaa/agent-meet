@@ -787,6 +787,91 @@ dialog p {
 .markdown tr:last-child td {
   border-bottom: 0;
 }
+.message-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.message-tools > span {
+  margin-right: auto;
+  font-size: 10px;
+  color: #8b977e;
+}
+.message-tools button,
+.message-toggle {
+  border: 0;
+  background: transparent;
+  color: #89967d;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+.message-toggle {
+  margin-left: 0;
+}
+.message-preview {
+  white-space: normal;
+  color: #8a957d;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.round-tag {
+  font-size: 9px;
+  color: #98a18d;
+}
+.round-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 25px;
+  font-size: 10px;
+  color: #8b977e;
+}
+.round-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: #e0e5d9;
+}
+.role-card {
+  overflow-wrap: anywhere;
+  padding: 9px 0;
+  border-bottom: 1px solid #edf0e7;
+}
+.room-meta #participants {
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.role-card:first-child {
+  padding-top: 0;
+}
+.role-card:last-child {
+  border: 0;
+  padding-bottom: 0;
+}
+.role-card strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+.role-card > span {
+  font-size: 9px;
+  color: #8a977b;
+  margin-left: 7px;
+}
+.role-card > p {
+  font-size: 10px;
+  color: #98a28c;
+  line-height: 1.7;
+  margin: 4px 0 0;
+}
+.review-progress {
+  font-size: 10px;
+  color: #8a977b;
+  margin: 0 0 9px;
+}
+[hidden] {
+  display: none !important;
+}
 .markdown th[align='right'],
 .markdown td[align='right'] {
   text-align: right;
