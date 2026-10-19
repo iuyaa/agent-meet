@@ -2,8 +2,30 @@
 
 运行环境：Linux、Python 3.12；工具仅使用 Python 标准库。
 
-执行 `python3 -m unittest discover -s tests -v`：39 项测试通过，其中原通信协议 14 项、
-保留主会话的前台调用 9 项、单参与者 9 项、双边托管及 Codex 包装脚本 7 项。
+执行 `python3 -m unittest discover -s tests -v`：47 项测试通过，其中原通信协议 14 项、
+保留主会话的前台调用 9 项、单参与者 9 项、双边托管及 Codex 包装脚本 7 项、
+本地页面服务 8 项。
+
+v0.5 本地页面验证：
+
+- 重复启动复用同一个进程；已记录事件在接口中立即可见；状态接口不泄露 CLI 配置和原生会话 ID。
+- 只绑定回环地址；接口要求令牌；错误 Host、外部 Origin 和任意文件路径被拒绝。
+- 网页停止讨论保留原记录、不伪造共识；Markdown 导出保留消息原文和实际审核状态。
+- 使用延迟回复的模拟 CLI，验证网页停止请求实际取消正在进行的前台调用，没有生成虚假回复。
+- 关闭页面服务保留讨论状态，可再次启动；不存在的讨论不会被创建。
+- 用 Chromium 和 Playwright 执行 `tests/browser_view.cjs`，验证消息自动更新、简报、
+  HTML 输入按文本展示、刷新和依据锚点不破坏令牌、草案与审核状态、下载导出、
+  390px 窄屏无横向溢出、停止/取消按钮以及断线提示。没有浏览器 JavaScript 错误。
+
+可选复现浏览器检查（需要开发环境已有 `playwright` 包及 Chromium；运行 skill 不需要）：
+
+```bash
+CHROMIUM=/path/to/chromium node tests/browser_view.cjs /tmp/agent-chat-preview.png
+```
+
+`examples/chat-preview.png` 来自上述浏览器检查。所有界面测试消息均为预先编写的演示数据，
+没有调用真实模型。仅 Windows npm 入口有模拟测试，新增页面的浏览器自动打开和服务进程
+尚未在 Windows、macOS 实机测试。
 
 覆盖了：
 

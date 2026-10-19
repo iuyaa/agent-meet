@@ -5,18 +5,21 @@
 Claude 每次完成一轮回复，结果作为工具返回交给当前 Codex。后续追问恢复同一个
 Claude 会话，最后由原 Codex 结合长期背景总结共识、分歧和待验证问题。
 
+**v0.5 新增本地群聊页面**：实时展示双方发言、上下文简报、结论及审核状态，
+可以停止讨论、下载完整记录。追问仍从原 Codex 会话发起。
+
 Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并配置好登录/服务。
 当前 Codex 可以来自桌面应用，默认不要求另装 Codex CLI。不依赖 Golutra。
 
 ## 获取和更新
 
-[下载 v0.4.0 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.4.0.zip?raw=true)。
+[下载 v0.5.0 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.5.0.zip?raw=true)。
 解压后用其中的 `agent-chat` 文件夹替换已有 skill。
 
 **保留原来的长会话。** 更新后让当前 Codex 重新读取更新后的 SKILL.md；
 不要为了加载新版本而新建一个没有历史的聊天。例如：
 
-> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.4 流程操作。
+> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.5 流程操作。
 > 保留你当前会话的上下文，和 Claude 讨论一下 glp-content 的 agent 应该怎么改。
 
 正常加载新版 skill 后，也可以继续使用：
@@ -31,7 +34,7 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 
 1. 当前 Codex 从已有上下文整理简报：问题、目标、当前判断、约束、已有决策、否决方案、代码依据和未知信息。
 2. 工具保存可查看的简报，并把它作为当前 Codex 的开场消息。
-3. 当前 Codex 调用 Claude 一次，并保持工具执行等待其返回。
+3. 打开本地群聊页面；当前 Codex 调用 Claude 一次，并保持工具执行等待其返回。
 4. Claude 读取简报和相关项目文件，回复观点、依据或疑问。
 5. 原 Codex 结合原有长对话追问、反驳或补充信息；下一次调用恢复同一个 Claude 会话。
 6. 原 Codex 提出结论，Claude 审核是否准确记录双方意见，随后导出完整记录。
@@ -51,6 +54,7 @@ Codex 应等待同一个执行完成。如果宿主确实结束了整个回合�
 
 ```bash
 python3 /absolute/path/agent-chat/scripts/consult.py init --room /absolute/path/work/new-discussion.sqlite --cwd /absolute/path/project --briefing-file /absolute/path/work/briefing.json
+python3 /absolute/path/agent-chat/scripts/view.py start --room /absolute/path/work/new-discussion.sqlite --open
 python3 /absolute/path/agent-chat/scripts/consult.py reply --room /absolute/path/work/new-discussion.sqlite --request-id claude-1
 ```
 
@@ -72,6 +76,36 @@ Windows 可用 `py -3` 替代 `python3`，路径含空格时加引号；原生 C
 普通消息交替发送。每个新操作使用新 request-id；成功结果丢失时，原 ID 重试返回
 已经保存的回复，不重复调用模型。错误或中断需要先检查日志，再明确使用新 ID 重试。
 恢复会话时如果 CLI 返回不同的原生会话 ID，工具报错，不静默新建替代会话。
+
+## 本地群聊页面
+
+![本地讨论页面，使用预先编写的演示消息](examples/chat-preview.png)
+
+上图是脚本生成的演示记录，没有调用模型。
+
+页面约每秒同步一次，显示真实记录中的完整发言、正在调用或等待哪一方、调用错误、
+结论草案、审核结果及依据消息。左侧是消息流，右侧是简报和讨论结果。
+模型回复完成并写入记录后才显示，不展示模型私有推理过程。
+
+- **停止讨论**：先提示确认，再关闭讨论并取消正在执行的模型调用，已有消息保留。
+- **导出记录**：下载 Markdown 快照，包含全部原话、草案及实际审核状态。
+- **继续追问**：在原 Codex 会话输入，保留其已有上下文。
+
+不需要安装 Node、前端依赖或 Golutra。`start` 自动选择本机空闲端口，重复执行复用
+已运行的页面；`--open` 尝试打开默认浏览器，也会返回完整本地链接。
+链接包含本讨论的访问令牌，应保留 `#` 后内容；前端文件不使用外部 CDN。
+服务只监听 `127.0.0.1`，同一台机器上的浏览器可访问。远程环境需要宿主支持的
+本地隧道，否则用 CLI 和导出记录；不会自动对公网开放。
+
+讨论结束后页面仍可查看。关闭浏览器标签不停止讨论；关闭本地页面服务也不停止讨论：
+
+```bash
+python3 /absolute/path/agent-chat/scripts/view.py status --room /absolute/path/work/new-discussion.sqlite
+python3 /absolute/path/agent-chat/scripts/view.py close --room /absolute/path/work/new-discussion.sqlite
+```
+
+页面不是宿主 UI 的唤醒接口，不能给已经结束的 Codex Desktop 回合注入消息。
+正常推进仍使用当前回合中等待的工具返回。页面打开失败不妨碍继续讨论。
 
 ## 结论与检查
 
@@ -109,7 +143,9 @@ python3 -m unittest discover -s tests -v
 
 测试以真实文件/进程验证协议和控制流程，模型回复由模拟 CLI 提供。
 覆盖简报完整性、逐轮返回、Claude 原生会话恢复、请求重试、主参与者提交结论与异常处理。
-旧通信、后台参与者和双边托管测试继续保留。
+旧通信、后台参与者和双边托管测试继续保留；总计 47 项自动测试通过。
+另以 Chromium 验证实时消息、结论、导出、停止、断线提示及窄屏布局。
+可选浏览器验证见 VALIDATION.md；安装使用 skill 不需要这些浏览器测试依赖。
 
 当前环境有 Codex CLI，没有 Claude Code CLI；真实 Codex ↔ Claude 端到端联调和
 Windows 实机启动尚未验证。模型结论的事实正确性也需要结合项目证据判断。
@@ -120,6 +156,7 @@ Windows 实机启动尚未验证。模型结论的事实正确性也需要结合
 - `SKILL.md`：当前主会话逐轮讨论的操作规约。
 - `scripts/consult.py`：默认前台逐轮调用和上下文简报。
 - `scripts/chat.py`：消息、草案、审核和导出。
+- `scripts/view.py`、`web/`：本地服务和群聊页面。
 - `scripts/peer.py`、`scripts/discuss.py`：CLI 适配与可选后台模式。
 - `examples/briefing.json`、`examples/conclusion.json`：输入结构示例。
 - `references/alternative-modes.md`：可选模式说明。

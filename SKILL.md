@@ -1,6 +1,6 @@
 ---
 name: agent-chat
-description: Let the current Codex or other main agent discuss a question with Claude while keeping its existing conversation context. Prepare a context briefing, call Claude once per foreground tool execution, resume the same Claude session for follow-ups, and record reviewed conclusions. Requires Python 3 and a configured local Claude CLI. New background main sessions are opt-in only.
+description: Let the current Codex or other main agent discuss a question with Claude while keeping its existing conversation context. Show the real discussion in a local chat page, prepare a context briefing, call Claude once per foreground tool execution, resume the same Claude session for follow-ups, and record reviewed conclusions. Requires Python 3 and a configured local Claude CLI. New background main sessions are opt-in only.
 ---
 
 # Agent Chat
@@ -66,7 +66,44 @@ opening message. It does not call a model or create another main agent. Do not
 duplicate the opening with another send. Reinitializing the exact same context
 is idempotent; different context/project/identities require a fresh room.
 
-## 2. Call Claude and receive one reply
+## 2. Open the local discussion page
+
+After initialization, start the viewer and try to open it in the local browser:
+
+```bash
+python3 /path/to/agent-chat/scripts/view.py start \
+  --room /shared/new-discussion.sqlite --open
+```
+
+Share the returned `url` as a clickable link, keeping its full `#token` fragment.
+If the browser cannot open, provide the URL and continue the discussion in this
+same turn. Do not use viewer startup as a reason to end the turn or request a
+"continue" message. The page is optional; a viewer error must not block the
+foreground discussion. If the user explicitly prefers no page, skip this step.
+
+The local page displays real recorded public messages, the saved briefing,
+calling/waiting/error states, proposals and reviews. It polls once per second;
+messages appear when the complete response is recorded, not as a fabricated
+typing stream. It does not expose private reasoning or the original full chat.
+Its Stop button closes the discussion and cancels an active CLI call. If stopped,
+respect that state, export what exists and finish; do not automatically reopen or
+retry. Export downloads a Markdown snapshot with its actual confirmation status.
+
+Keep initiating and following up from THIS existing main conversation. The page
+does not send prompts into Codex Desktop or wake a finished UI turn. Do not
+start another main CLI to make it look interactive. Do not close the viewer at
+discussion completion; the user may still want to read or export the history.
+Closing the browser tab does not stop the discussion or local server. If asked
+to close only the viewer, use `view.py close --room ...`; this preserves the room.
+
+The server binds only to `127.0.0.1` on a random port; no frontend build or npm
+installation is needed. Open it on the machine running the skill. In a remote
+environment, a localhost link points to that remote machine; use a supported
+local tunnel if available or continue with CLI/report output. Do not silently
+bind publicly or publish the discussion. The URL contains access to this room;
+share it only with the user. Local state is stored in `ROOM.sqlite.view/`.
+
+## 3. Call Claude and receive one reply
 
 ```bash
 python3 /path/to/agent-chat/scripts/consult.py reply \
@@ -113,7 +150,7 @@ back. Ready responses can also be committed after an interrupted write without
 another model call. Failed or interrupted requests require inspecting their logs
 and an explicit new request ID after fixing the problem; do not retry blindly.
 
-## 3. Conclude from the original main conversation
+## 4. Conclude from the original main conversation
 
 Read the actual record before drafting the conclusion:
 

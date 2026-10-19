@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Agent Chat · 讨论现场</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Agent Chat 首页"
+        ><span class="brand-mark">a<span>↗</span></span
+        >Agent Chat<span class="local">本地讨论</span></a
+      >
+      <div class="actions">
+        <span id="connection" class="connection">连接中</span
+        ><button id="export" disabled>↓ 导出记录</button
+        ><button id="stop" class="stop" disabled>停止讨论</button>
+      </div>
+    </header>
+    <main class="layout">
+      <section class="conversation" aria-labelledby="topic">
+        <div class="room-heading">
+          <div class="eyebrow">DISCUSSION ROOM <span>／ 02 PARTICIPANTS</span></div>
+          <h1 id="topic">正在打开讨论…</h1>
+          <div class="room-meta">
+            <span id="participants"></span><span class="separator">·</span><span id="count"></span
+            ><span id="phase" class="phase">连接中</span>
+          </div>
+        </div>
+        <div id="notice" class="notice" role="status" hidden></div>
+        <div id="messages" class="messages" aria-label="讨论消息"></div>
+        <div id="activity" class="activity" role="status"></div>
+        <footer class="compose-hint">
+          <span class="hint-icon">↩</span>
+          <div>
+            在原 Codex 会话中继续追问<span>当前页面同步展示发言与结果；原会话保留已有上下文。</span>
+          </div>
+          <span class="read-only">实时记录</span>
+        </footer>
+      </section>
+      <aside class="sidebar" aria-label="讨论背景和结论">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>上下文简报</h2>
+            <span class="tiny-label">CONTEXT</span>
+          </div>
+          <div id="briefing" class="briefing"><p class="muted">等待读取讨论背景。</p></div>
+        </section>
+        <section class="panel conclusion-panel">
+          <div class="panel-heading">
+            <h2>讨论结果</h2>
+            <span class="tiny-label">OUTCOME</span>
+          </div>
+          <div id="outcome"><p class="muted">讨论进行后，结论草案和审核状态会出现在这里。</p></div>
+        </section>
+        <p class="sidebar-note">
+          只展示已记录的公开发言与调用状态。<br />双方确认记录，不代表建议已经过事实验证。
+        </p>
+      </aside>
+    </main>
+    <dialog id="stop-dialog">
+      <form method="dialog">
+        <h2>停止这次讨论？</h2>
+        <p>正在执行的 Claude 调用会被取消，已有记录会保留供查看和导出。</p>
+        <div class="dialog-actions">
+          <button value="cancel">继续讨论</button
+          ><button value="stop" class="danger">停止讨论</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
