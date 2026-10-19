@@ -120,6 +120,11 @@ class ConsultationTests(unittest.TestCase):
         proposal.write_text(json.dumps({"summary": "使用短事务并保留负载验证事项", "agreements": ["本地第一版使用 SQLite"],
                                         "disagreements": [], "open_questions": ["峰值负载"],
                                         "evidence_message_ids": [1, 2]}, ensure_ascii=False), encoding="utf-8")
+        assessment = self.root / "assessment.json"
+        assessment.write_text(json.dumps({"decision": "conclude", "reason": "双方意见和未验证事项已明确，可以提交记录审核",
+                                          "blocking_questions": [], "accepted_uncertainties": ["负载尚未验证"],
+                                          "next_steps": [], "evidence_message_ids": [1, 2]}), encoding="utf-8")
+        self.chat("assess", "--as", "codex", "--request-id", "ready", "--file", assessment)
         self.chat("propose", "--as", "codex", "--request-id", "main-conclusion", "--file", proposal)
         reviewed = self.reply("claude-review")
         self.assertEqual(reviewed["event"]["kind"], "review")

@@ -100,6 +100,12 @@ class GroupTests(unittest.TestCase):
         body = {"summary": "准确记录各角色共识、分歧及待验证问题", "agreements": ["保留原主持人上下文"],
                 "disagreements": ["可保留不同判断"], "open_questions": ["真实用户反馈"],
                 "evidence_message_ids": ids if ids is not None else [r[0] for r in events]}
+        assessment = {"decision": "conclude", "reason": "已记录各方意见，未知信息明确保留，可提交记录审核",
+                      "blocking_questions": [], "accepted_uncertainties": ["真实用户反馈未知"],
+                      "next_steps": [], "evidence_message_ids": [r[0] for r in events]}
+        assessment_path = self.root / (request + "-assessment.json")
+        assessment_path.write_text(json.dumps(assessment), encoding="utf-8")
+        self.command("chat.py", "assess", "--as", "codex", "--request-id", request + "-assessment", "--file", assessment_path)
         path = self.root / (request + ".json")
         path.write_text(json.dumps(body), encoding="utf-8")
         return self.command("chat.py", "propose", "--as", "codex", "--request-id", request, "--file", path, **kwargs)

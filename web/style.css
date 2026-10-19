@@ -297,7 +297,19 @@ h1 {
   background: #eef3e8;
   border-color: #d4dfc7;
 }
+.message.assessment .bubble {
+  background: #f4f5ec;
+  border-color: #dfe5cc;
+}
+.message.extension .bubble {
+  background: #eef3f1;
+  border-color: #d6e4dd;
+}
+#assessment .structured {
+  font-size: 11px;
+}
 .proposal-label,
+.decision-label,
 .review-label {
   display: block;
   font-size: 10px;

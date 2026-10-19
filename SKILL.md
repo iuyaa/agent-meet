@@ -1,6 +1,6 @@
 ---
 name: agent-chat
-description: Discuss with Claude or multiple named roles while preserving the current main conversation. Configure rounds, role focus and Claude/Codex backends; resume each role's independent native session, show Markdown messages with folding in a local chat page, and record reviewed conclusions. Requires Python 3 and configured local role CLIs. Replacement main/background sessions are opt-in only.
+description: Discuss with Claude or multiple named roles while preserving the current main conversation. Configure roles and rounds, assess readiness before any draft, extend the same room on the user's decision and resume original native sessions. Show Markdown messages, folding, assessments and reviewed conclusions in a local page. Requires Python 3 and configured local role CLIs.
 ---
 
 # Agent Chat
@@ -21,6 +21,10 @@ additional Codex CLI is required for this flow, even in Codex Desktop.
 The Python tools need only the standard library. No Golutra is required.
 Additional roles default to Claude; each may explicitly use Codex and needs its
 configured local CLI. The existing main remains the host in both modes.
+When asked to continue an existing discussion, read [continuation](references/continuation.md)
+and use `chat.py extend` on its ORIGINAL room. Do not run init, create a new room,
+or replace native role sessions. The user chose to decide each extra budget after
+you explain its reason; do not add rounds or time automatically.
 
 ## 1. Capture the relevant current context
 
@@ -162,7 +166,21 @@ back. Ready responses can also be committed after an interrupted write without
 another model call. Failed or interrupted requests require inspecting their logs
 and an explicit new request ID after fixing the problem; do not retry blindly.
 
-## 4. Conclude from the original main conversation
+## 4. Assess readiness, then conclude or request continuation
+
+Before every conclusion draft, and especially after the last planned round,
+read [readiness and continuation](references/continuation.md) and record a public
+`chat.py assess` decision using that exact JSON schema. Evaluate the actual views,
+evidence, blocking questions and accepted uncertainties using this original host's
+long-term context. A budget reaching zero does not imply the question is resolved.
+
+A fresh `conclude` assessment allows a draft. A `continue` assessment blocks a
+draft: continue within unused authorized budget, or explain the concrete gaps
+and requested extra rounds/time and wait for the user's decision at the limit.
+An explicit user continuation instruction already authorizes the stated addition.
+After permission, extend the SAME room and resume the SAME native sessions.
+Do not manufacture a conclusion or initialize replacement participants to bypass
+the cap. New replies/reviews require a new assessment before another draft.
 
 Read the actual record before drafting the conclusion:
 
@@ -196,7 +214,7 @@ The reply now reviews the pending proposal. Acceptance closes the room; it means
 the record represents both views accurately, not that every recommendation is
 correct or every disagreement is resolved. Rejection preserves the draft and
 specific corrections. Revise under a new request ID or ask a clarifying question
-if the message/time budget permits. At most four proposals are allowed; after
+if the message/time budget permits, or request an approved continuation. At most four proposals per continuation period are allowed; after
 four rejected drafts, stop and export the differences rather than force agreement.
 
 ```bash

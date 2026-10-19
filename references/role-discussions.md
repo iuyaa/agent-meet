@@ -112,7 +112,14 @@ are not blindly retried. Do not move to another host round while roles are missi
 
 ## Conclude and gather every role's review
 
-After a complete round, the original host prepares the same conclusion JSON
+Before any draft, and particularly after the final planned round, follow
+[readiness and continuation](continuation.md): record the original host's
+assessment deciding whether the question can be concluded or needs further
+discussion. Do not let the round cap make that judgement. If extra budget is
+needed, explain why and wait for the user's decision, then extend the SAME room
+and resume the original sessions. Do not reinitialize roles.
+
+After a complete round and a fresh `conclude` assessment, the original host prepares the same conclusion JSON
 schema as SKILL.md. Cite real message IDs from **the host and EVERY role**.
 Preserve disagreements and unknowns. Only the original host may propose.
 
@@ -128,7 +135,7 @@ The same round command now asks every pending role to review this proposal.
 Only all roles explicitly accepting marks the record confirmed. One acceptance,
 a majority, no response or timeout is insufficient. One rejection keeps the
 record disputed. Wait for all reviews before revising; address the objections
-and propose a new draft under a new ID, at most four drafts. Approval means
+and reassess before a new draft under a new ID, at most four drafts per continuation period. Approval means
 the record reflects the role's view, not that all advice is factually validated.
 
 Use `chat.py export/stop/read` as in SKILL.md. Reads are paginated; follow

@@ -7,7 +7,7 @@ Claude 会话，最后由原 Codex 结合长期背景总结共识、分歧和待
 
 **v0.5 新增本地群聊页面**：实时展示双方发言、上下文简报、结论及审核状态，
 可以停止讨论、下载完整记录。追问仍从原 Codex 会话发起。
-v0.6 新增消息折叠、按轮次讨论、自定义角色及多角色并行参与。
+v0.7 新增结束前评估及原房间续聊；保留消息折叠、按轮次讨论、自定义角色及并行参与。
 角色默认全部使用 Claude，也可分别指定 Codex/Claude；每个角色保留独立的原生会话。
 
 Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并配置好登录/服务。
@@ -15,13 +15,13 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 
 ## 获取和更新
 
-[下载 v0.6.0 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.6.0.zip?raw=true)。
+[下载 v0.7.0 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.7.0.zip?raw=true)。
 解压后用其中的 `agent-chat` 文件夹替换已有 skill。
 
 **保留原来的长会话。** 更新后让当前 Codex 重新读取更新后的 SKILL.md；
 不要为了加载新版本而新建一个没有历史的聊天。例如：
 
-> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.6 流程操作。
+> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.7 流程操作。
 > 保留你当前会话的上下文，和 Claude 讨论一下 glp-content 的 agent 应该怎么改。
 
 正常加载新版 skill 后，也可以继续使用：
@@ -66,6 +66,38 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 返回后仍由原 Codex 结合长期背景继续判断。结论需每个角色明确审核接受才标记全体确认；
 有人反对、超时或无回复都会保留对应状态。
 
+## 限制用完后继续讨论
+
+双人和多角色模式都可以在**原房间**续聊。你可以直接说：
+
+> 再讨论两轮，重点核对失败路径，恢复原来的参与角色会话，不要新建讨论。
+
+或：
+
+> 延长十分钟，继续原讨论。
+
+原 Codex 保留长对话，各角色恢复原生会话 ID，消息、简报、旧结论和审核都留在原记录里。
+旧结论作为历史保留，追加讨论后不会继续被当作当前全体结论；本次结果需重新审核。
+v0.6 的已有房间也能原地使用，不用迁移或初始化新房间。
+
+**结论草稿前先评估，不因轮次用完就强行总结。** 主持人记录“可以总结”或“需要继续”、
+依据、关键缺口、允许保留的不确定性及下一步。若还需要额外轮次或时间，先说明理由和
+建议追加的额度，由你决定；默认不自动追加。你已明确说“再两轮”时不会重复征求确认。
+若不追加，则保留并导出实际进展与未解决问题。
+
+```bash
+python3 /absolute/path/agent-chat/scripts/chat.py assess --room /absolute/path/work/discussion.sqlite --as codex --request-id readiness-1 --file /absolute/path/work/assessment.json
+python3 /absolute/path/agent-chat/scripts/chat.py extend --room /absolute/path/work/discussion.sqlite --as codex --request-id approved-more-1 --rounds 2 --minutes 10 --reason '用户确认再讨论两轮，核对失败路径'
+```
+
+`assess` 结构见 [examples/assessment.json](examples/assessment.json)。新建前台讨论在没有有效
+“可以总结”评估时会拒绝草稿，新发言或审核后需重评。评估由原 Codex 作出，工具验证记录
+和结构，不能替代事实核查。角色会话无法恢复时明确报错，不悄悄新建替代会话。
+
+仅追加轮次但时间已过，会续上 10 分钟；仅延时且轮次也已用完，会加一轮。
+如只想延长重新评估和审核的时间，显式指定 `--rounds 0 --minutes 10`。
+运行中先等调用结束或停止后再追加。完整规则见 [续聊说明](references/continuation.md)。
+
 ## 默认流程
 
 1. 当前 Codex 从已有上下文整理简报：问题、目标、当前判断、约束、已有决策、否决方案、代码依据和未知信息。
@@ -73,7 +105,7 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 3. 打开本地群聊页面；当前 Codex 调用 Claude 一次，并保持工具执行等待其返回。
 4. Claude 读取简报和相关项目文件，回复观点、依据或疑问。
 5. 原 Codex 结合原有长对话追问、反驳或补充信息；下一次调用恢复同一个 Claude 会话。
-6. 原 Codex 提出结论，Claude 审核是否准确记录双方意见，随后导出完整记录。
+6. 原 Codex 先评估是否可结束；可以总结时提交结论草稿，Claude 审核后导出记录。需要追加时先说明理由，由你决定。
 
 **简报不是完整历史的自动复制。** 它保存本次讨论需要的背景摘录；原 Codex 始终负责
 结合未写入简报的长期上下文把关。Claude 可指出材料缺失，不应假定自己知道全部历史。
@@ -197,6 +229,7 @@ Windows 实机启动尚未验证。模型结论的事实正确性也需要结合
 - `SKILL.md`：当前主会话逐轮讨论的操作规约。
 - `scripts/consult.py`：默认前台逐轮调用和上下文简报。
 - `scripts/group.py`：可配置角色、轮次、并行回复及全体审核。
+- `scripts/lifecycle.py`：结束前评估、原房间追加和旧结论历史边界。
 - `scripts/chat.py`：消息、草案、审核和导出。
 - `scripts/view.py`、`web/`：本地服务和群聊页面。
 - `scripts/peer.py`、`scripts/discuss.py`：CLI 适配与可选后台模式。

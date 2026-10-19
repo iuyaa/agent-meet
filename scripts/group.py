@@ -19,6 +19,7 @@ if __name__ == "__main__":
 import chat
 import consult
 import peer
+import lifecycle
 
 RULES = """You are ONE independent role in a multi-role discussion.
 Follow your_role.title and your_role.focus. Do not impersonate other participants.
@@ -68,7 +69,8 @@ def state(conn, room=None):
     authors = {e["sender"] for e in messages if e["round_index"] == current}
     pending = [name for name in names if name not in authors] if main in authors else [main]
     completed = current - (1 if pending else 0)
-    proposal = next((e for e in reversed(events) if e["kind"] == "proposal"), None)
+    anchor = lifecycle.metadata(conn)["anchor"]
+    proposal = next((e for e in reversed(events) if e["kind"] == "proposal" and e["id"] > anchor), None)
     reviews = [e for e in events if e["kind"] == "review" and proposal and e["reply_to"] == proposal["id"]]
     reviewed = {e["sender"] for e in reviews}
     pending_reviewers = [name for name in names if name not in reviewed] if proposal else []
@@ -77,7 +79,7 @@ def state(conn, room=None):
     reason = room["stop_reason"] or ("agreement" if confirmed else "expired" if time.time() >= room["expires"] else None)
     summarizing = time.time() >= room["discuss_until"] or completed >= settings["rounds"]
     phase = "closed" if reason else "summarizing" if summarizing else "discussing"
-    return {"mode": "group", "main": main, "topic": room["topic"],
+    return lifecycle.enrich(conn, {"mode": "group", "main": main, "topic": room["topic"],
             "participants": [main] + names, "roles": public_roles(settings),
             "joined": [r[0] for r in conn.execute("SELECT name FROM members ORDER BY joined, name")],
             "phase": phase, "close_reason": reason, "message_count": len(messages),
@@ -89,7 +91,7 @@ def state(conn, room=None):
             "discuss_until": chat.utc(room["discuss_until"]), "expires_at": chat.utc(room["expires"]),
             "latest_proposal": proposal, "latest_review": reviews[-1] if reviews else None,
             "reviews": reviews, "conclusion_status": "none" if not proposal else
-            "disputed" if disputed else "confirmed" if confirmed else "unconfirmed"}
+            "disputed" if disputed else "confirmed" if confirmed else "unconfirmed"})
 
 
 def append(conn, args):
@@ -132,6 +134,7 @@ def append(conn, args):
             if not parent or parent["kind"] != "message" or parent["sender"] == args.agent:
                 chat.fail("reply-to must reference another participant's message")
     elif kind == "proposal":
+        lifecycle.require_conclusion(conn, current)
         if args.agent != current["main"]:
             chat.fail("only the original host may propose a conclusion")
         if current["pending_reviewers"]:
@@ -139,7 +142,7 @@ def append(conn, args):
         authors = {r[0] for r in conn.execute("SELECT sender FROM events WHERE kind='message' AND round_index=?", (round_index,))}
         if authors != set(current["participants"]):
             chat.fail("finish this round before proposing a conclusion")
-        if conn.execute("SELECT COUNT(*) FROM events WHERE kind='proposal'").fetchone()[0] >= 4:
+        if conn.execute("SELECT COUNT(*) FROM events WHERE kind='proposal' AND id>?", (lifecycle.metadata(conn)["anchor"],)).fetchone()[0] >= 4:
             chat.fail("four proposal attempts used; stop and export remaining disagreements")
     else:
         if not current["latest_proposal"] or reply_to != current["latest_proposal"]["id"]:
@@ -213,6 +216,7 @@ def initialize(args):
             conn.execute("ALTER TABLE events ADD COLUMN round_index INTEGER NOT NULL DEFAULT 1")
             conn.execute("CREATE TABLE group_config(body TEXT NOT NULL)")
             conn.execute("CREATE TABLE group_sessions(agent TEXT PRIMARY KEY,backend TEXT NOT NULL,native_session_id TEXT NOT NULL,UNIQUE(backend,native_session_id))")
+            lifecycle.setup(conn)
             now = time.time()
             conn.execute("INSERT INTO room VALUES(1,2,?,?,?,?,?,?,NULL)",
                          (briefing["question"], json.dumps([main["id"]] + [r["id"] for r in roles]), now,
@@ -238,7 +242,8 @@ def status(room):
         workers[role["id"]] = {key: info[key] for key in ("state", "detail") if key in info}
     return {"mode": "group", "status": current, "briefing": settings["briefing"],
             "main": settings["main"]["id"], "roles": public_roles(settings), "workers": workers,
-            "next_action": "finish" if current["phase"] == "closed" else
+            "next_action": "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
+            "finish or explicitly extend on the user's continuation request" if current["phase"] == "closed" else
             "call pending roles" if current["pending_reviewers"] or
             any(r["id"] in current["pending_speakers"] for r in settings["roles"]) else
             "original host follows up or proposes a conclusion"}
@@ -261,6 +266,8 @@ def commit_response(room, role, cached, request_id):
             if not owner or owner["agent"] != role["id"]:
                 chat.fail("different roles returned the same native session; refusing to mix their context")
             current = state(conn)
+            if current["epoch"] != cached.get("epoch", 0):
+                chat.fail("discussion was extended; no stale role response was recorded")
             args = argparse.Namespace(command=result["action"], room=room, agent=role["id"],
                                       request_id=request_id, text=result.get("text"), text_file=None,
                                       reply_to=None, proposal=cached["proposal"], decision=result.get("decision"))
@@ -286,6 +293,8 @@ def call_role(args, role, settings, batch, digest):
             existing = conn.execute("SELECT * FROM events WHERE sender=? AND request_id=?", (role["id"], event_request)).fetchone()
             owner = conn.execute("SELECT agent FROM group_sessions WHERE backend=? AND native_session_id=?",
                                  (role["backend"], info.get("native_session_id"))).fetchone()
+            stored = conn.execute("SELECT native_session_id FROM group_sessions WHERE agent=?", (role["id"],)).fetchone()
+            had_message = conn.execute("SELECT 1 FROM events WHERE sender=? AND kind='message' LIMIT 1", (role["id"],)).fetchone()
         if existing:
             if cached and cached.get("native_session_id") and batch["input_after"] >= info.get("read_cursor", 0):
                 peer.publish(worker, info, "idle", native_session_id=cached["native_session_id"],
@@ -293,13 +302,22 @@ def call_role(args, role, settings, batch, digest):
             return {"event": chat.event(existing), "duplicate": True}
         if owner and owner["agent"] != role["id"]:
             chat.fail("native session belongs to another role; fix the CLI configuration and use a fresh room")
+        if stored:
+            if info.get("native_session_id") and info["native_session_id"] != stored[0]:
+                chat.fail("saved native session differs from this role's original session")
+            info["native_session_id"] = stored[0]
+        elif batch.get("epoch", 0) > 0 and had_message:
+            chat.fail("cannot recover this role's original native session; refusing to start a replacement")
+        with chat.database(args.room) as conn:
+            if lifecycle.metadata(conn)["epoch"] != batch.get("epoch", 0):
+                chat.fail("this batch predates continuation; use a new request-id")
         if cached and cached["phase"] != "response_ready":
             chat.fail("this role request failed/interrupted; inspect logs and retry with a NEW batch request-id")
         if not cached:
             if info.get("pending_request"):
                 peer.publish(worker, info, "failed", pending_request=None, detail="earlier call interrupted; inspect logs")
                 chat.fail("an earlier role call was interrupted; inspect logs before explicitly retrying with a NEW ID")
-            cached = {"phase": "pending", "allowed": batch["allowed"], "round_index": batch["round_index"],
+            cached = {"phase": "pending", "allowed": batch["allowed"], "round_index": batch["round_index"], "epoch": batch.get("epoch", 0),
                       "proposal": batch["proposal"]}
             peer.write_json(cache_path, cached)
             peer.publish(worker, info, "calling", pending_request=event_request, detail=None)
@@ -310,7 +328,7 @@ def call_role(args, role, settings, batch, digest):
                        "project_directory": settings["cwd"], "topic": settings["briefing"]["question"],
                        "briefing": settings["briefing"], "round_index": batch["round_index"],
                        "max_rounds": settings["rounds"], "allowed_actions": batch["allowed"],
-                       "status": batch["status"], "new_events": [e for e in batch["events"] if e["id"] > info.get("read_cursor", 0)]}
+                       "status": batch["status"], "new_events": [e for e in batch["events"] if batch.get("epoch", 0) > 0 or e["id"] > info.get("read_cursor", 0)]}
             namespace = argparse.Namespace(room=args.room, agent=role["id"], backend=role["backend"],
                                           cli=role["cli"], model=role.get("model"), cwd=settings["cwd"],
                                           turn_timeout=args.turn_timeout)
@@ -370,14 +388,18 @@ def run_round(args):
             # explicit partial retries and --only calls arriving later.
             snapshot_name = ("proposal-" + str(current["latest_proposal"]["id"]) if current["pending_reviewers"]
                              else "round-" + str(current["current_round"])) + ".input.json"
+            if current["epoch"]:
+                snapshot_name = "epoch-" + str(current["epoch"]) + "-" + snapshot_name
             snapshot_path = root / snapshot_name
             if snapshot_path.exists():
                 shared = json.loads(snapshot_path.read_text(encoding="utf-8"))
             else:
-                shared = {"events": events, "status": current,
-                          "input_after": max((e["id"] for e in events), default=0)}
+                visible = [e for e in events if not (current["epoch"] and not current["pending_reviewers"] and
+                           e["kind"] == "message" and e["round_index"] == current["current_round"] and e["sender"] != current["main"])]
+                shared = {"events": visible, "status": current,
+                          "input_after": max((e["id"] for e in visible), default=0)}
                 peer.write_json(snapshot_path, shared)
-            batch = {"selected": selected, "only": args.only, "round_index": current["current_round"],
+            batch = {"selected": selected, "only": args.only, "round_index": current["current_round"], "epoch": current["epoch"],
                      "proposal": current["latest_proposal"]["id"] if current["pending_reviewers"] else None,
                      "allowed": ["review"] if current["pending_reviewers"] else ["send"],
                      **shared}

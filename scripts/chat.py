@@ -82,12 +82,13 @@ def database(path, write=False):
 def event(row):
     result = dict(row)
     result["created"] = utc(result["created"])
-    if result["kind"] in ("proposal", "review"):
+    if result["kind"] in ("proposal", "review", "assessment", "extension"):
         result["body"] = json.loads(result["body"])
     return result
 
 
 def state(conn):
+    import lifecycle
     room = dict(conn.execute("SELECT * FROM room").fetchone())
     if room["version"] == 2:
         import group
@@ -96,7 +97,8 @@ def state(conn):
     joined = [r[0] for r in conn.execute("SELECT name FROM members ORDER BY joined, name")]
     count = conn.execute("SELECT COUNT(*) FROM events WHERE kind = 'message'").fetchone()[0]
     last = conn.execute("SELECT * FROM events WHERE kind = 'message' ORDER BY id DESC LIMIT 1").fetchone()
-    proposal = conn.execute("SELECT * FROM events WHERE kind = 'proposal' ORDER BY id DESC LIMIT 1").fetchone()
+    anchor = lifecycle.metadata(conn)["anchor"]
+    proposal = conn.execute("SELECT * FROM events WHERE kind = 'proposal' AND id>? ORDER BY id DESC LIMIT 1", (anchor,)).fetchone()
     review = None
     if proposal:
         review = conn.execute("SELECT * FROM events WHERE kind = 'review' AND reply_to = ?",
@@ -112,7 +114,7 @@ def state(conn):
     phase = "closed" if reason else (
         "summarizing" if count >= room["max_messages"] or now >= room["discuss_until"]
         else "discussing")
-    return {
+    return lifecycle.enrich(conn, {
         "topic": room["topic"], "participants": names, "joined": joined,
         "phase": phase, "close_reason": reason,
         "message_count": count, "max_messages": room["max_messages"],
@@ -123,7 +125,7 @@ def state(conn):
         "conclusion_status": "none" if not proposal else (
             "unconfirmed" if not review else
             "confirmed" if json.loads(review["body"])["decision"] == "accept" else "disputed"),
-    }
+    })
 
 
 def identity(conn, name):
@@ -263,9 +265,11 @@ def append(args):
                 if not parent or parent["kind"] != "message" or parent["sender"] == args.agent:
                     fail("reply-to must reference the other participant's discussion message")
         elif kind == "proposal":
+            import lifecycle
+            lifecycle.require_conclusion(conn, status)
             if pending:
                 fail("a conclusion proposal is already awaiting review")
-            proposals = conn.execute("SELECT COUNT(*) FROM events WHERE kind = 'proposal'").fetchone()[0]
+            proposals = conn.execute("SELECT COUNT(*) FROM events WHERE kind = 'proposal' AND id>?", (lifecycle.metadata(conn)["anchor"],)).fetchone()[0]
             if proposals >= 4:
                 fail("four proposal attempts used; stop and export remaining disagreements")
         else:
@@ -315,7 +319,8 @@ def get_status(args):
 def stop(args):
     reason = nonempty(args.reason, "reason")
     with database(args.room, write=True) as conn:
-        if state(conn)["phase"] != "closed":
+        current = state(conn)
+        if current["phase"] != "closed" or current["close_reason"] == "expired":
             conn.execute("UPDATE room SET stop_reason = ?", ("stopped: " + reason,))
         return {"status": state(conn)}
 
@@ -346,6 +351,13 @@ def export(args):
             lines.extend([f"### {label}", ""] + ["- " + v for v in body[key]] + ([] if body[key] else ["未列出"]) + [""])
         lines.extend(["依据消息：" + ", ".join("#" + str(i) for i in body["evidence_message_ids"]), ""])
     lines.extend(["## 完整记录", ""])
+    if status.get("latest_assessment"):
+        assessment = status["latest_assessment"]["body"]["assessment"]
+        lines[-2:-2] = ["## 结束前评估", "", "判断：" + ("可以总结" if assessment["decision"] == "conclude" else "需要继续讨论"), "",
+                       assessment["reason"], "", "关键缺口：" + "；".join(assessment["blocking_questions"]), "",
+                       "已知不确定性：" + "；".join(assessment["accepted_uncertainties"]), ""]
+    if status.get("epoch"):
+        lines[-2:-2] = ["续聊次数：" + str(status["epoch"]) + "。旧结论和审核保留在下方历史中，当前结果只对应最后一次续聊之后。", ""]
     for item in events:
         content = item["body"] if isinstance(item["body"], str) else json.dumps(item["body"], ensure_ascii=False, indent=2)
         round_label = f" · 第 {item['round_index']} 轮" if is_group else ""
@@ -363,12 +375,12 @@ def export(args):
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     sub = result.add_subparsers(dest="command", required=True)
-    for name in ("create", "join", "status", "send", "read", "wait", "propose", "review", "stop", "export"):
+    for name in ("create", "join", "status", "send", "read", "wait", "propose", "review", "stop", "export", "assess", "extend"):
         p = sub.add_parser(name)
         p.add_argument("--room", required=True, help="absolute path of the shared SQLite discussion file")
-        if name in ("join", "send", "read", "wait", "propose", "review"):
+        if name in ("join", "send", "read", "wait", "propose", "review", "assess", "extend"):
             p.add_argument("--as", dest="agent", required=True)
-        if name in ("send", "propose", "review"):
+        if name in ("send", "propose", "review", "assess", "extend"):
             p.add_argument("--request-id", required=True, help="reuse unchanged on retries")
         if name in ("send", "review"):
             group = p.add_mutually_exclusive_group(required=True)
@@ -385,7 +397,7 @@ def parser():
             p.add_argument("--after", type=int, default=0)
             if name == "wait":
                 p.add_argument("--timeout", type=float, default=25)
-        elif name == "propose":
+        elif name in ("propose", "assess"):
             p.add_argument("--file", required=True, help="UTF-8 conclusion JSON")
         elif name == "review":
             p.add_argument("--proposal", type=int, required=True)
@@ -394,20 +406,31 @@ def parser():
             p.add_argument("--reason", default="user requested stop")
         elif name == "export":
             p.add_argument("--output", required=True)
+        elif name == "extend":
+            p.add_argument("--rounds", type=int, help="additional rounds; two messages each in a two-person room")
+            p.add_argument("--minutes", type=float, help="additional discussion minutes")
+            p.add_argument("--reason", required=True)
+            p.add_argument("--automatic", action="store_true", help="requires prior configured allowance; disabled by default")
     return result
 
 
 def main(argv=None):
+    import lifecycle
+    import peer
     args = parser().parse_args(argv)
     handlers = {"create": create, "join": join, "status": get_status,
                 "send": append, "read": read, "wait": read, "propose": append,
-                "review": append, "stop": stop, "export": export}
+                "review": append, "stop": stop, "export": export,
+                "assess": lifecycle.assess, "extend": lifecycle.extend}
     try:
         result = handlers[args.command](args)
         print(json.dumps({"ok": True, **result}, ensure_ascii=False, indent=2))
         return 0
     except (ChatError, OSError, sqlite3.Error, ValueError, OverflowError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 1
+    except peer.AlreadyRunning:
+        print(json.dumps({"ok": False, "error": "a discussion call is active; wait for it or stop it before extending"}), file=sys.stderr)
         return 1
 
 

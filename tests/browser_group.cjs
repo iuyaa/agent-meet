@@ -111,8 +111,6 @@ let browser;
   assert.match(await page.locator('#round-progress').innerText(), /2 \/ 2 轮/);
   assert.equal(await page.locator('#event-2 .message-body').isVisible(), false);
   await page.locator('#expand-all').click();
-  if (process.argv[2])
-    await page.screenshot({ path: path.resolve(process.argv[2]), fullPage: true });
   const proposal = {
     summary: '保留原主持人上下文，采用 **独立角色 + 有限轮次** 的讨论方式。',
     agreements: ['公开展示各角色的实际发言', '结论需要全体角色审核'],
@@ -122,6 +120,100 @@ let browser;
   };
   const proposalFile = path.join(root, 'proposal.json');
   fs.writeFileSync(proposalFile, JSON.stringify(proposal));
+  const assessmentFile = path.join(root, 'assessment.json');
+  function assess(id) {
+    fs.writeFileSync(
+      assessmentFile,
+      JSON.stringify({
+        decision: 'conclude',
+        reason: '已收齐角色意见，保留不确定性，可交全体审核',
+        blocking_questions: [],
+        accepted_uncertainties: ['真实模型与用户反馈待验证'],
+        next_steps: [],
+        evidence_message_ids: proposal.evidence_message_ids,
+      }),
+    );
+    command('chat.py', 'assess', '--as', 'codex', '--request-id', id, '--file', assessmentFile);
+  }
+  const originalSessions = Object.fromEntries(
+    roles.map((role) => [
+      role.id,
+      JSON.parse(fs.readFileSync(room + '.peers/' + role.id + '/status.json', 'utf8'))
+        .native_session_id,
+    ]),
+  );
+  fs.writeFileSync(
+    assessmentFile,
+    JSON.stringify({
+      decision: 'continue',
+      reason: '验收边界仍缺少证据，建议用户确认后追加一轮交叉检查。',
+      blocking_questions: ['失败时是否仍满足业务验收标准？'],
+      accepted_uncertainties: ['真实用户反馈仍未收集'],
+      next_steps: ['请各角色针对验收边界提出可验证条件'],
+      evidence_message_ids: proposal.evidence_message_ids,
+    }),
+  );
+  command(
+    'chat.py',
+    'assess',
+    '--as',
+    'codex',
+    '--request-id',
+    'needs-more',
+    '--file',
+    assessmentFile,
+  );
+  await page.waitForFunction(() =>
+    document.getElementById('assessment').textContent.includes('建议继续讨论'),
+  );
+  assert.match(await page.locator('#activity').innerText(), /等待用户决定/);
+  assert.equal(command('group.py', 'status').status.completed_rounds, 2);
+  if (process.argv[2])
+    await page.screenshot({ path: path.resolve(process.argv[2]), fullPage: true });
+  command(
+    'chat.py',
+    'extend',
+    '--as',
+    'codex',
+    '--request-id',
+    'user-approved-more',
+    '--rounds',
+    '1',
+    '--reason',
+    '用户确认再讨论一轮，继续核对验收边界',
+  );
+  await page.waitForSelector('.message.extension');
+  assert.match(await page.locator('#assessment').innerText(), /已继续原讨论/);
+  command(
+    'chat.py',
+    'send',
+    '--as',
+    'codex',
+    '--request-id',
+    'host-third',
+    '--text',
+    '继续原讨论。请结合已有角色意见，补齐验收边界的证据和可验证条件。',
+  );
+  const continued = await round('continued-third');
+  assert.equal(continued.status.completed_rounds, 3);
+  await page.waitForFunction(() =>
+    document.getElementById('round-progress').textContent.includes('3 / 3 轮'),
+  );
+  for (const role of roles) {
+    const calls = fs
+      .readFileSync(path.join(root, 'calls-' + role.id + '.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map(JSON.parse);
+    assert.equal(calls.length, 3);
+    const argv = calls.at(-1).argv;
+    assert.equal(argv[argv.indexOf('--resume') + 1], originalSessions[role.id]);
+  }
+  proposal.evidence_message_ids = command('chat.py', 'read', '--as', 'codex')
+    .events.filter((event) => event.kind === 'message')
+    .map((event) => event.id);
+  fs.writeFileSync(proposalFile, JSON.stringify(proposal));
+  assess('ready-one');
   command(
     'chat.py',
     'propose',
@@ -145,6 +237,7 @@ let browser;
   );
   assert.notEqual(await page.locator('#phase').innerText(), '已确认记录');
   fs.writeFileSync(path.join(root, 'mode-' + roles[4].id + '.txt'), 'ok');
+  assess('ready-revision');
   command(
     'chat.py',
     'propose',
@@ -165,7 +258,8 @@ let browser;
   const download = await downloadPromise;
   const report = fs.readFileSync(await download.path(), 'utf8');
   assert.match(report, /全部角色已确认记录/);
-  assert.match(report, /轮次：2 \/ 2 轮完成/);
+  assert.match(report, /轮次：3 \/ 3 轮完成/);
+  assert.match(report, /续聊次数：1/);
   roles.forEach((role) => assert.ok(report.includes(role.title)));
   const response = await page.evaluate(async () =>
     (
@@ -180,7 +274,7 @@ let browser;
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   assert.deepEqual(errors, []);
   console.log(
-    'Group browser checks passed: five-role progress, parallel calls, rounds, fold persistence, partial/rejected/all reviews, export, privacy and mobile. Fake CLIs only.',
+    'Group browser checks passed: readiness, user-approved continuation reuses five original sessions, rounds, fold persistence, all-role reviews, export, privacy and mobile. Fake CLIs only.',
   );
 })()
   .catch((error) => {

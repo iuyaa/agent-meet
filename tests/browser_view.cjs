@@ -196,6 +196,28 @@ let browser;
   };
   const proposalFile = path.join(root, 'proposal.json');
   fs.writeFileSync(proposalFile, JSON.stringify(proposal));
+  const assessmentFile = path.join(root, 'assessment.json');
+  fs.writeFileSync(
+    assessmentFile,
+    JSON.stringify({
+      decision: 'conclude',
+      reason: '观点和未知信息已记录，可审核草稿',
+      blocking_questions: [],
+      accepted_uncertainties: ['真实模型尚未验证'],
+      next_steps: [],
+      evidence_message_ids: [1, 2, 3, 4],
+    }),
+  );
+  command(
+    'chat.py',
+    'assess',
+    '--as',
+    'codex',
+    '--request-id',
+    'assessment-one',
+    '--file',
+    assessmentFile,
+  );
   const proposed = command(
     'chat.py',
     'propose',
@@ -226,7 +248,7 @@ let browser;
   );
   await page.waitForFunction(() => document.getElementById('phase').textContent === '已确认记录');
   assert.match(await page.locator('.proposal-label').innerText(), /已确认记录/);
-  assert.equal(await page.locator('#event-8 strong').innerText(), '确认');
+  assert.equal(await page.locator('.message.review strong').innerText(), '确认');
   assert.equal(await page.locator('#stop').isDisabled(), true);
   const downloadPromise = page.waitForEvent('download');
   await page.locator('#export').click();
@@ -247,6 +269,27 @@ let browser;
   await page.waitForSelector('#event-1');
   send('claude', 'stop-reply', '本记录仍需审核。');
   fs.writeFileSync(proposalFile, JSON.stringify({ ...proposal, evidence_message_ids: [1, 2] }));
+  fs.writeFileSync(
+    assessmentFile,
+    JSON.stringify({
+      decision: 'conclude',
+      reason: '已收齐双方观点',
+      blocking_questions: [],
+      accepted_uncertainties: [],
+      next_steps: [],
+      evidence_message_ids: [1, 2],
+    }),
+  );
+  command(
+    'chat.py',
+    'assess',
+    '--as',
+    'codex',
+    '--request-id',
+    'stop-ready',
+    '--file',
+    assessmentFile,
+  );
   command(
     'chat.py',
     'propose',

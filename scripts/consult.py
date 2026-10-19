@@ -11,6 +11,7 @@ from pathlib import Path
 
 import chat
 import peer
+import lifecycle
 
 BRIEF_STRINGS = ("question", "goal", "current_view")
 BRIEF_LISTS = ("constraints", "decisions", "rejected_options", "code_references", "unknowns")
@@ -92,6 +93,8 @@ def initialize(args):
         chat.create(argparse.Namespace(room=args.room, topic=briefing["question"],
                                        participants=[args.main, args.reviewer],
                                        max_messages=args.max_messages, minutes=args.minutes))
+        with chat.database(args.room, write=True) as conn:
+            lifecycle.setup(conn)
         for name in (args.main, args.reviewer):
             chat.join(argparse.Namespace(room=args.room, agent=name))
         config = {"mode": "existing-main", "main": args.main, "reviewer": args.reviewer,
@@ -112,7 +115,9 @@ def status(room):
     return {"mode": "existing-main", "main": config["main"], "reviewer": config["reviewer"],
             "briefing_file": str(directory(room) / "briefing.md"), "briefing": config["briefing"],
             "model": model_state(room), "status": current,
-            "next_action": "finish" if current["phase"] == "closed" else "original main continues after the tool result"}
+            "next_action": "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
+            "finish or explicitly extend on the user's continuation request" if current["phase"] == "closed" else
+            "original main assesses, follows up or concludes after the tool result"}
 
 
 def reply(args):
@@ -130,6 +135,8 @@ def reply(args):
     with peer.participant_lock(root), peer.participant_lock(peer_root):
         current, events = snapshot(args.room, config)
         info = model_state(args.room)
+        if "pending_request" not in info:
+            chat.fail("saved consultation state is missing; cannot resume the original session")
         cached = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else None
         existing = next((e for e in events if e["sender"] == config["reviewer"] and
                          e["request_id"] == event_request_id), None)
@@ -143,6 +150,9 @@ def reply(args):
             return {"event": existing, "duplicate": True, **status(args.room)}
         if current["phase"] == "closed":
             chat.fail("discussion is closed; export it instead of calling Claude")
+        if current["epoch"] and not info.get("native_session_id"):
+            if info.get("next_turn", 1) > 1 or any(e["sender"] == config["reviewer"] and e["kind"] == "message" for e in events):
+                chat.fail("cannot recover Claude's original native session; refusing to start a replacement")
         if info["pending_request"] and info["pending_request"] != request_id:
             peer.publish(root, info, "failed", pending_request=None,
                          detail="an earlier call was interrupted; its result is not confirmed")
@@ -159,11 +169,13 @@ def reply(args):
             peer.publish(root, info, "failed", pending_request=None,
                          detail="this request failed or was interrupted")
             chat.fail("this request failed or was interrupted; inspect its logs, then retry explicitly with a NEW request-id")
+        if cached and cached.get("epoch", 0) != current["epoch"]:
+            chat.fail("this request predates continuation; use a new request-id")
         if cached and cached["input_event_id"] != input_event_id:
             chat.fail("discussion changed since this response; use a new request-id to ask against current context")
         if not cached:
             turn = info["next_turn"]
-            cached = {"phase": "pending", "request_id": request_id, "turn": turn, "input_event_id": input_event_id}
+            cached = {"phase": "pending", "request_id": request_id, "turn": turn, "input_event_id": input_event_id, "epoch": current["epoch"]}
             peer.write_json(cache_path, cached)
             info.update(next_turn=turn + 1, pending_request=request_id)
             peer.publish(root, info, "calling")

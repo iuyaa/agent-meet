@@ -10,6 +10,7 @@ let lastEvents = '',
   lastBriefing = '',
   lastOutcome = '',
   lastRoster = '',
+  lastAssessment = '',
   stopped = false;
 let foldState;
 try {
@@ -171,6 +172,25 @@ function conclusion(body) {
   el.append(refs);
   return el;
 }
+function assessmentView(value) {
+  const el = node('div', undefined, 'structured');
+  el.append(
+    node(
+      'span',
+      value.decision === 'conclude' ? '可以总结' : '建议继续讨论',
+      'outcome-status ' + (value.decision === 'conclude' ? '' : 'unconfirmed'),
+    ),
+    markdown(value.reason),
+  );
+  for (const [key, title] of [
+    ['blocking_questions', '关键缺口'],
+    ['accepted_uncertainties', '明确保留的不确定性'],
+    ['next_steps', '下一步'],
+  ]) {
+    if (value[key].length) list(el, title, value[key]);
+  }
+  return el;
+}
 function message(event, data) {
   const role = data.roles?.find((role) => role.id === event.sender);
   const reviewer = role ? event.sender !== data.main : event.sender === data.reviewer;
@@ -219,7 +239,29 @@ function message(event, data) {
   const bubble = node('div', undefined, 'bubble');
   const body = node('div', undefined, 'message-body');
   body.id = 'body-' + event.id;
-  if (event.kind === 'proposal') {
+  if (event.kind === 'assessment') {
+    body.append(
+      node('div', '主持人结束前评估', 'decision-label'),
+      assessmentView(event.body.assessment),
+    );
+  } else if (event.kind === 'extension') {
+    body.append(
+      node('span', '已追加讨论 · 第 ' + event.body.epoch + ' 次续聊', 'decision-label'),
+      node(
+        'p',
+        '追加 ' + event.body.added_rounds + ' 轮 · 延长 ' + event.body.added_minutes + ' 分钟',
+      ),
+      markdown(event.body.reason),
+    );
+    if (event.body.previous_proposal_id)
+      body.append(
+        node(
+          'p',
+          '旧草案 #' + event.body.previous_proposal_id + ' 及审核保留为历史，本次继续后重新评估。',
+          'muted',
+        ),
+      );
+  } else if (event.kind === 'proposal') {
     const reviews = data.events.filter(
       (item) => item.kind === 'review' && item.reply_to === event.id,
     );
@@ -238,7 +280,15 @@ function message(event, data) {
           : data.status.phase === 'closed'
             ? '尚未确认'
             : '等待对方审核';
-    body.append(node('span', '结论草案 · ' + label, 'proposal-label'), conclusion(event.body));
+    const historical = data.status.latest_extension && event.id < data.status.latest_extension.id;
+    body.append(
+      node(
+        'span',
+        historical ? '历史草案 · 已进入追加讨论' : '结论草案 · ' + label,
+        'proposal-label',
+      ),
+      conclusion(event.body),
+    );
   } else if (event.kind === 'review') {
     const accepted = event.body.decision === 'accept';
     body.append(
@@ -323,6 +373,8 @@ function render(data) {
         : s.close_reason === 'expired'
           ? '讨论期限已到 · 未确认的草案仍保留原状态'
           : '讨论已停止 · 已有记录已保留';
+  } else if (s.continuation_needs_approval) {
+    activity = '主持人建议继续 · 等待用户决定是否追加讨论';
   } else if (isGroup) {
     activity = active.length
       ? active.map(([id]) => display(id)).join('、') + ' 正在回复…'
@@ -331,7 +383,7 @@ function render(data) {
         : s.pending_reviewers.length
           ? '等待审核：' + s.pending_reviewers.map(display).join('、')
           : s.phase === 'summarizing'
-            ? '轮次或讨论时间已到 · 等待主持人提交结论'
+            ? '轮次或讨论时间已到 · 等待主持人评估是否结束'
             : s.pending_speakers.length
               ? '等待发言：' + s.pending_speakers.map(display).join('、')
               : '本轮已完成 · 等待原主持人追问或总结';
@@ -342,7 +394,7 @@ function render(data) {
   } else if (s.latest_proposal && !s.latest_review) {
     activity = '等待结论审核';
   } else if (s.phase === 'summarizing') {
-    activity = '进入总结阶段 · 等待结论草案';
+    activity = '预算已用完 · 等待主持人评估结束或申请继续';
   } else {
     activity = '等待 ' + s.next_speaker + ' 发言';
   }
@@ -374,6 +426,36 @@ function render(data) {
   $('notice').textContent = error || '';
   $('stop').disabled = stopped;
   $('export').disabled = false;
+  const assessmentSig = JSON.stringify([
+    s.latest_assessment,
+    s.assessment_fresh,
+    s.epoch,
+    s.phase,
+    s.continuation_needs_approval,
+  ]);
+  if (assessmentSig !== lastAssessment) {
+    const area = $('assessment');
+    area.replaceChildren();
+    if (s.latest_assessment) {
+      area.append(assessmentView(s.latest_assessment.body.assessment));
+      if (s.continuation_needs_approval)
+        area.append(
+          node('p', '请在原 Codex 会话确认追加轮次或时间；确认后恢复原角色会话。', 'muted'),
+        );
+      else if (!s.assessment_fresh && !stopped)
+        area.append(node('p', '有新发言或审核，下一份草稿前需重新评估。', 'muted'));
+    } else
+      area.append(
+        node(
+          'p',
+          s.epoch
+            ? '已继续原讨论；本轮结束后重新评估。'
+            : '结论草稿前先判断是否已讨论充分，或仍有关键缺口。',
+          'muted',
+        ),
+      );
+    lastAssessment = assessmentSig;
+  }
   const sig = JSON.stringify([data.events, s.phase]);
   if (sig !== lastEvents) {
     const nearBottom =
@@ -446,7 +528,11 @@ function render(data) {
       out.append(
         node(
           'p',
-          stopped ? '讨论结束，尚无结论草案。' : '结论形成后，共识、分歧与待验证问题会出现在这里。',
+          s.epoch
+            ? '追加讨论进行中；旧结论及审核保留在消息历史中。'
+            : stopped
+              ? '讨论结束，尚无结论草案。'
+              : '结论形成后，共识、分歧与待验证问题会出现在这里。',
           'muted',
         ),
       );
