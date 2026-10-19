@@ -7,19 +7,20 @@ Claude 会话，最后由原 Codex 结合长期背景总结共识、分歧和待
 
 **v0.5 新增本地群聊页面**：实时展示双方发言、上下文简报、结论及审核状态，
 可以停止讨论、下载完整记录。追问仍从原 Codex 会话发起。
+v0.5.1 支持消息、简报和结论的 Markdown 渲染，包括代码块、列表、引用和表格。
 
 Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并配置好登录/服务。
 当前 Codex 可以来自桌面应用，默认不要求另装 Codex CLI。不依赖 Golutra。
 
 ## 获取和更新
 
-[下载 v0.5.0 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.5.0.zip?raw=true)。
+[下载 v0.5.1 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.5.1.zip?raw=true)。
 解压后用其中的 `agent-chat` 文件夹替换已有 skill。
 
 **保留原来的长会话。** 更新后让当前 Codex 重新读取更新后的 SKILL.md；
 不要为了加载新版本而新建一个没有历史的聊天。例如：
 
-> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.5 流程操作。
+> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.5.1 流程操作。
 > 保留你当前会话的上下文，和 Claude 讨论一下 glp-content 的 agent 应该怎么改。
 
 正常加载新版 skill 后，也可以继续使用：
@@ -29,6 +30,10 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 项目安装位置可使用 `.agents/skills/agent-chat/`（Codex）或
 `.claude/skills/agent-chat/`（Claude Code）。也可以直接指定任意位置的 SKILL.md。
 默认只需发起窗口能读取 skill；被调用的 Claude 不需要再安装一份。
+
+如果已有 v0.5 页面服务运行，更新后先用 `view.py close --room ...` 关闭页面服务，
+再用 `view.py start --room ... --open` 打开同一讨论。只关闭浏览器标签不会更新服务代码。
+已有讨论记录和模型会话不受影响。
 
 ## 默认流程
 
@@ -86,6 +91,9 @@ Windows 可用 `py -3` 替代 `python3`，路径含空格时加引号；原生 C
 页面约每秒同步一次，显示真实记录中的完整发言、正在调用或等待哪一方、调用错误、
 结论草案、审核结果及依据消息。左侧是消息流，右侧是简报和讨论结果。
 模型回复完成并写入记录后才显示，不展示模型私有推理过程。
+消息、简报、结论草案和审核意见支持 Markdown：标题、粗体、斜体、删除线、行内代码、
+代码块、嵌套列表、任务列表、引用、链接及表格。代码保留缩进；宽代码和表格在内容区域内
+横向滚动。HTML 按文字展示，图片显示为可点击链接；导出始终保留原始 Markdown。
 
 - **停止讨论**：先提示确认，再关闭讨论并取消正在执行的模型调用，已有消息保留。
 - **导出记录**：下载 Markdown 快照，包含全部原话、草案及实际审核状态。
@@ -162,5 +170,6 @@ Windows 实机启动尚未验证。模型结论的事实正确性也需要结合
 - `references/alternative-modes.md`：可选模式说明。
 
 本包为独立实现，未复制 Golutra 源码或资产，采用 MIT 许可，见 LICENSE。
+随包附带的 Marked、DOMPurify 使用各自上游许可，版本和许可见 [web/vendor/README.md](web/vendor/README.md)。
 Claude 参数参考：[官方 CLI 参考](https://code.claude.com/docs/en/cli-reference)、
 [程序化调用与结构化输出](https://code.claude.com/docs/en/headless)。

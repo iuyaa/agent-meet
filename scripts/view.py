@@ -23,6 +23,9 @@ import consult
 import peer
 
 WEB = Path(__file__).resolve().parent.parent / "web"
+ASSETS = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css",
+          "/vendor/marked-17.0.5.js": "vendor/marked-17.0.5.js",
+          "/vendor/dompurify-3.4.17.js": "vendor/dompurify-3.4.17.js"}
 
 
 def directory(room):
@@ -111,8 +114,8 @@ class Handler(BaseHTTPRequestHandler):
                     chat.export(argparse.Namespace(room=self.server.room, output=output))
                     self.respond(200, output.read_bytes(), "text/markdown; charset=utf-8",
                                  **{"Content-Disposition": 'attachment; filename="agent-chat-report.md"'})
-            elif self.path in ("/", "/app.js", "/style.css"):
-                path = WEB / ("index.html" if self.path == "/" else self.path[1:])
+            elif self.path in ASSETS:
+                path = WEB / ASSETS[self.path]
                 mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
                 self.respond(200, path.read_bytes(), mime + "; charset=utf-8")
             else:

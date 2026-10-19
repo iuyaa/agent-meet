@@ -16,6 +16,98 @@ function node(tag, text, cls) {
   if (cls) el.className = cls;
   return el;
 }
+function escapeHTML(text) {
+  return text.replace(
+    /[&<>"']/g,
+    (char) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[char],
+  );
+}
+const markdownParser = new marked.Marked({
+  gfm: true,
+  breaks: true,
+  renderer: {
+    // Raw HTML remains visible text. Images become links, avoiding automatic remote requests.
+    html: ({ text }) => escapeHTML(text),
+    image: ({ href, text }) =>
+      `<a href="${escapeHTML(href)}">图片：${escapeHTML(text || '查看图片')}</a>`,
+    checkbox: ({ checked }) => (checked ? '☑ ' : '☐ '),
+  },
+});
+function markdown(text, cls = '') {
+  const el = node('div', undefined, 'markdown ' + cls);
+  try {
+    const fragment = DOMPurify.sanitize(markdownParser.parse(String(text)), {
+      ALLOWED_TAGS: [
+        'p',
+        'br',
+        'hr',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'strong',
+        'em',
+        'del',
+        'code',
+        'pre',
+        'blockquote',
+        'ul',
+        'ol',
+        'li',
+        'a',
+        'table',
+        'thead',
+        'tbody',
+        'tr',
+        'th',
+        'td',
+      ],
+      ALLOWED_ATTR: ['href', 'title', 'class', 'start', 'align'],
+      ALLOW_DATA_ATTR: false,
+      ALLOW_ARIA_ATTR: false,
+      RETURN_DOM_FRAGMENT: true,
+    });
+    el.append(fragment);
+    for (const link of el.querySelectorAll('a')) {
+      const href = link.getAttribute('href') || '';
+      if (/^#event-\d+$/.test(href)) continue;
+      let protocol;
+      try {
+        protocol = new URL(href).protocol;
+      } catch (_) {
+        /* Not an absolute URL. */
+      }
+      if (!['https:', 'http:', 'mailto:'].includes(protocol)) {
+        link.removeAttribute('href');
+      } else {
+        link.setAttribute('rel', 'noopener noreferrer');
+        link.setAttribute('target', '_blank');
+      }
+    }
+    for (const table of el.querySelectorAll('table')) {
+      const scroll = node('div', undefined, 'table-scroll');
+      scroll.tabIndex = 0;
+      scroll.setAttribute('role', 'region');
+      scroll.setAttribute('aria-label', '表格，可横向滚动');
+      table.replaceWith(scroll);
+      scroll.append(table);
+    }
+  } catch (_) {
+    // Rendering failures must not hide an agent's message or interrupt the discussion.
+    el.textContent = String(text);
+    el.classList.add('plain-fallback');
+  }
+  return el;
+}
 async function api(path, method = 'GET') {
   const response = await fetch(path, {
     method,
@@ -36,12 +128,16 @@ function list(parent, title, items) {
     return;
   }
   const ul = node('ul');
-  items.forEach((item) => ul.append(node('li', item)));
+  items.forEach((item) => {
+    const li = node('li');
+    li.append(markdown(item));
+    ul.append(li);
+  });
   parent.append(ul);
 }
 function conclusion(body) {
   const el = node('div', undefined, 'structured');
-  el.append(node('p', body.summary, 'summary'));
+  el.append(markdown(body.summary, 'summary'));
   list(el, '共识', body.agreements);
   list(el, '保留分歧', body.disagreements);
   list(el, '待验证', body.open_questions);
@@ -97,18 +193,18 @@ function message(event, data) {
         accepted ? '✓ 已确认记录准确' : '提出异议 · 需要修订',
         'review-label ' + (accepted ? '' : 'rejected'),
       ),
-      node('p', event.body.comment),
+      markdown(event.body.comment),
     );
   } else if (data.briefing && event.request_id === 'consult-opening') {
     bubble.append(
       node('div', '带入本次讨论的上下文', 'opening-label'),
-      node('div', data.briefing.current_view, 'opening-view'),
+      markdown(data.briefing.current_view, 'opening-view'),
     );
     const details = node('details');
-    details.append(node('summary', '查看完整开场简报'), node('div', event.body, 'full-brief'));
+    details.append(node('summary', '查看完整开场简报'), markdown(event.body, 'full-brief'));
     bubble.append(details);
   } else {
-    bubble.append(node('p', event.body));
+    bubble.append(markdown(event.body));
   }
   content.append(bubble);
   el.append(content);
@@ -181,7 +277,7 @@ function render(data) {
     $('briefing').replaceChildren();
     if (data.briefing) {
       const b = data.briefing;
-      $('briefing').append(node('h3', '讨论目标'), node('p', b.goal));
+      $('briefing').append(node('h3', '讨论目标'), markdown(b.goal));
       list($('briefing'), '约束', b.constraints);
       list($('briefing'), '已有决策', b.decisions);
       const more = node('details');

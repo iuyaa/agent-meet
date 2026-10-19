@@ -82,8 +82,10 @@ same turn. Do not use viewer startup as a reason to end the turn or request a
 foreground discussion. If the user explicitly prefers no page, skip this step.
 
 The local page displays real recorded public messages, the saved briefing,
-calling/waiting/error states, proposals and reviews. It polls once per second;
-messages appear when the complete response is recorded, not as a fabricated
+calling/waiting/error states, proposals and reviews. Message text, briefings and
+conclusions render Markdown (including code and tables) using bundled local
+browser libraries. Exports preserve the original source text. It polls once per
+second; messages appear when the complete response is recorded, not as a fabricated
 typing stream. It does not expose private reasoning or the original full chat.
 Its Stop button closes the discussion and cancels an active CLI call. If stopped,
 respect that state, export what exists and finish; do not automatically reopen or
@@ -95,6 +97,8 @@ start another main CLI to make it look interactive. Do not close the viewer at
 discussion completion; the user may still want to read or export the history.
 Closing the browser tab does not stop the discussion or local server. If asked
 to close only the viewer, use `view.py close --room ...`; this preserves the room.
+After updating an already-running viewer, close and start its service for the
+same room; closing a browser tab alone does not reload the Python server code.
 
 The server binds only to `127.0.0.1` on a random port; no frontend build or npm
 installation is needed. Open it on the machine running the skill. In a remote

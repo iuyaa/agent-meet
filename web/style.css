@@ -640,3 +640,158 @@ dialog p {
     margin-left: 0;
   }
 }
+
+/* Markdown stays inside each chat bubble, including wide code and tables. */
+.markdown,
+.markdown.summary,
+.bubble details .markdown {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.85;
+}
+.markdown.plain-fallback {
+  white-space: pre-wrap;
+}
+.briefing > .markdown {
+  font-size: 11px;
+  color: #69765d;
+}
+.markdown p,
+.markdown ul,
+.markdown ol {
+  margin: 0 0 0.8em;
+  white-space: normal;
+  font-size: inherit;
+  color: inherit;
+}
+.markdown > :last-child,
+.markdown li > :last-child {
+  margin-bottom: 0;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: 1em 0 0.5em;
+  font-weight: 650;
+  line-height: 1.5;
+  color: inherit;
+  letter-spacing: normal;
+}
+.markdown h1 {
+  font-size: 1.35em;
+}
+.markdown h2 {
+  font-size: 1.2em;
+}
+.markdown h3 {
+  font-size: 1.08em;
+}
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 1em;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 1.7em;
+}
+.markdown li {
+  margin: 0.25em 0;
+  white-space: normal;
+}
+.markdown li .markdown > p:only-child {
+  margin: 0;
+}
+.markdown blockquote {
+  margin: 0.9em 0;
+  padding: 0.25em 0 0.25em 1em;
+  border-left: 3px solid #b9c9ab;
+  color: #7b8971;
+}
+.markdown code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+}
+.markdown :not(pre) > code {
+  background: #edf0e7;
+  color: #576a45;
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+  white-space: break-spaces;
+}
+.markdown pre {
+  max-width: 100%;
+  margin: 1em 0;
+  padding: 15px 17px;
+  border: 1px solid #344a3b;
+  border-radius: 7px;
+  background: #293c30;
+  color: #e3eadc;
+  overflow-x: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  line-height: 1.7;
+  tab-size: 2;
+}
+.markdown pre code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  white-space: inherit;
+}
+.markdown a {
+  color: #527c43;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.markdown a:not([href]) {
+  color: inherit;
+  text-decoration: none;
+}
+.markdown hr {
+  border: 0;
+  border-top: 1px solid #dce3d3;
+  margin: 1.2em 0;
+}
+.markdown .table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1em 0;
+  border: 1px solid #dce3d3;
+  border-radius: 6px;
+}
+.markdown table {
+  border-collapse: collapse;
+  min-width: 100%;
+  width: max-content;
+  font-size: 0.95em;
+}
+.markdown th,
+.markdown td {
+  padding: 7px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e3e8dc;
+}
+.markdown th {
+  background: #f1f5eb;
+  color: #5f7451;
+  font-weight: 600;
+}
+.markdown tr:last-child td {
+  border-bottom: 0;
+}
+.markdown th[align='right'],
+.markdown td[align='right'] {
+  text-align: right;
+}
+.markdown th[align='center'],
+.markdown td[align='center'] {
+  text-align: center;
+}

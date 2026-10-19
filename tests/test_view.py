@@ -92,7 +92,7 @@ class ViewerTests(unittest.TestCase):
         self.assertEqual(self.http("/api/state", headers={"Origin": self.origin})[0], 200)
 
     def test_static_assets_are_whitelisted_and_do_not_embed_room_data(self):
-        for path in ("/", "/app.js", "/style.css"):
+        for path in view.ASSETS:
             code, headers, body = self.http(path, auth=False)
             self.assertEqual(code, 200)
             self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
