@@ -2,8 +2,8 @@
 
 运行环境：Linux、Python 3.12；工具仅使用 Python 标准库。
 
-执行 `python3 -m unittest discover -s tests -v`：23 项测试通过，其中原通信协议 14 项、
-自动 Claude 参与者 9 项。
+执行 `python3 -m unittest discover -s tests -v`：30 项测试通过，其中原通信协议 14 项、
+单参与者 9 项、双边托管及 Codex 包装脚本 7 项。
 
 覆盖了：
 
@@ -30,6 +30,19 @@
 - CLI 非零退出、非 JSON 响应、缺失结构化结果、权限拒绝、错误动作均明确失败。
 - 停止讨论会取消正在运行的 CLI，模型单轮超时也会结束并报告。
 - Windows npm 包装脚本解析为 Node 入口，避免 batch/shell 解释参数。
+
+双边托管使用两个独立的模拟 CLI 进程验证：
+
+- 发起进程仅启动任务，双方自行完成四条消息、草案、审核和自动导出。
+- `run` 等待同一任务并返回最终结果，不需要额外的人工「继续」消息。
+- 每方分别恢复自己的原生会话；Codex 的 JSONL、thread ID 和结构化输出被正确解析。
+- 重复发起同一任务返回原结果，不重复调用模型或覆盖报告。
+- 找不到任一 CLI 时，在建讨论前失败。
+- Codex 失败时终止 Claude 参与者，保留部分记录，明确标记无共识。
+- 停止任务会取消运行中的双方；缺失 thread ID、无效结果和失败事件不会被当成成功。
+- Codex 的 Windows npm 包装脚本也解析为 Node 入口。
+
+本机 Codex CLI 已用 `--help` 验证实际生成的 exec/resume 参数能够解析；该检查没有调用模型。
 
 执行 `python3 examples/two_process_demo.py --output ...`：两个独立 Python
 进程完成四条消息、一个结论草案及一次对方确认，导出六条事件的完整报告。

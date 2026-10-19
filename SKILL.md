@@ -1,21 +1,93 @@
 ---
 name: agent-chat
-description: Discuss a question with another agent, automatically starting a new Claude Code participant when requested. Exchange views, challenge assumptions, and record reviewed conclusions without copying invitations. Requires Python 3 and a shared local filesystem; automatic Claude participation also needs a working local Claude CLI.
+description: Run Codex and Claude as two managed background participants that discuss a question and save reviewed conclusions without copied invitations or manual continue messages. Use for cross-agent discussion, critique and conclusions. Requires Python 3 and working local Codex and Claude CLIs; manual joining remains available.
 ---
 
 # Agent Chat
 
-Use `scripts/chat.py` for the discussion and `scripts/peer.py` to automatically
-start a new Claude participant. When the user says "discuss this with Claude",
-use automatic startup by default. The user should not have to copy an invitation
-or install this skill separately for the managed Claude participant.
+**Default: use `scripts/discuss.py run` to manage BOTH participants.** The current
+window coordinates the request and waits for the result; the two background CLI
+sessions do the actual discussing. Neither copied invitations nor a user message
+saying "continue" should be needed. Install this skill only for the coordinator.
 
-The local Claude CLI must already be installed and authenticated/configured.
-It uses its existing model configuration and access; do not change credentials
-or model selection. The CLI uses its usual model service. Local message transport
-itself needs only Python's standard library and a shared local SQLite file.
-No Golutra or always-on service is required. Keep the initiating agent active
-until the discussion closes or a concrete error needs the user's intervention.
+Both local Codex and Claude CLIs must already be installed and configured. They
+use their existing credentials and model selections; do not modify those or
+substitute models. Local communication uses only Python's standard library.
+No Golutra or always-on service is required. Only the explicit alternative modes
+below use `chat.py`/`peer.py` directly.
+
+## Default: complete a managed discussion
+
+1. Resolve `scripts/discuss.py` relative to this SKILL.md. Resolve the project
+   directory from the user's task. Use absolute paths, quoted when they contain
+   spaces. Windows may use `py -3` instead of `python3`.
+2. Write the user's question to a UTF-8 topic file using your file-writing tool.
+   Include relevant user-provided constraints and a short factual briefing from
+   the current context if the CLI sessions would otherwise lack it. Keep facts,
+   assumptions and unknowns distinct. Do not assume the background sessions
+   inherit this window's context. Maximum topic length is 24,000 characters.
+3. Choose a fresh room path outside version control. **Do not separately create
+   the room, join as codex/claude, or send messages under those identities.**
+   The managed command owns both identities and their first messages.
+
+```bash
+python3 /path/to/agent-chat/scripts/discuss.py run \
+  --room /shared/new-discussion.sqlite --cwd /absolute/path/to/project \
+  --topic-file /shared/question.txt --max-messages 12 --minutes 10
+```
+
+4. Keep waiting on this command until its final result. If the host tool yields
+   a running process/session ID, resume that SAME tool execution with the host's
+   wait/poll facility. Do not restart the discussion, finish with "started", or
+   ask the user to send "continue". Provide short progress updates as needed.
+5. The command first prints a started event, then returns the final result.
+   Check `finished` and `job.state`. Read the file at `job.report_path` once the
+   job has finished. Distinguish confirmed conclusions from drafts/disagreements.
+   If the job fails, report the concrete detail and inspect the named local logs;
+   do not present startup as a successful discussion.
+
+`run` starts a detached controller and both participants. The discussion itself
+continues even if the coordinator process exits. This is NOT control of an
+already-ended UI turn: the runner cannot inject unsolicited messages into it.
+Normally the existing tool execution stays pending and returns the final report.
+If the host ends that execution, the background result remains available on disk.
+
+For hosts with only short-running tool calls, use `start` with the same arguments,
+then call `wait` yourself until `finished: true` (do not ask the user to do this):
+
+```bash
+python3 /path/to/agent-chat/scripts/discuss.py wait --room /shared/new-discussion.sqlite --timeout 25
+python3 /path/to/agent-chat/scripts/discuss.py status --room /shared/new-discussion.sqlite
+```
+
+Status includes both participants, conclusion state and the report path. Native
+model/thread IDs are used to resume each CLI between its turns. Codex uses a
+read-only sandbox; Claude uses Read/Glob/Grep. The Python runner handles writes
+to the protocol. Neither participant should invoke this skill recursively.
+The job stops the other participant and exports the available record if one
+backend fails. Timeouts, errors and missing replies never imply agreement.
+
+If CLIs are not on PATH, add `--codex-cli /path/to/codex` and/or
+`--claude-cli /path/to/claude`. These are executable paths, not shell commands.
+Missing executables are detected before starting either model. If either is
+unavailable, explain the error; do not silently switch to manual continuation.
+
+On a user stop request:
+
+```bash
+python3 /path/to/agent-chat/scripts/discuss.py stop --room /shared/new-discussion.sqlite
+```
+
+This closes the room, stops the managed CLI calls and preserves a partial report.
+Managed job state is in `ROOM.sqlite.job/`, participant state in `ROOM.sqlite.peers/`.
+Re-running start/run for the SAME managed room returns its current or saved result;
+use a fresh path for a new question. Do not reuse old expired discussions.
+
+## Explicit alternative modes
+
+Use the remaining instructions only if the user explicitly wants the current
+window to participate directly or two existing windows to join manually. The
+default managed flow above does not need any of these invitation/join steps.
 
 ## Identify the discussion
 
@@ -60,7 +132,7 @@ Joining is idempotent. After a host restart, join under the same identity and
 read from 0 to restore context. Joining does not recover the host model's native
 session. Use only one active host session per identity.
 
-## Automatically start Claude
+## Alternative: current window plus managed Claude
 
 After creating/joining the discussion and sending the opening message, run:
 
