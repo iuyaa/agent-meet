@@ -2,8 +2,13 @@
 
 Use this flow when the user specifies roles, requests multiple participants, or
 sets a number of discussion rounds. The existing main conversation remains the
-host. For a plain two-agent exchange without these options, `consult.py` remains
+host, whether it is Codex, Claude Code, pi, OpenCode or another capable agent.
+Always set `--main` to its actual identity; do not inherit a Codex label from examples.
+For a plain two-agent exchange without these options, `consult.py` remains
 available. Never initialize both modes into the same room.
+
+Replace `HOST` in every example with your actual initiating identity. See
+[agent adapters](agent-adapters.md) for supported engines and reverse-host examples.
 
 ## Interpret the user's request
 
@@ -15,10 +20,9 @@ Users can set everything in their initial natural-language instruction, e.g.:
 
 - A role is a title plus a clear focus, independent of the CLI backend/model.
 - Default additional roles use **Claude**, as requested by the user. Override
-  each role's `backend` with `codex` or `claude` if specified. Do not silently mix.
+  each role's `backend` with `claude`, `codex`, `pi` or `opencode` if specified. Do not silently mix.
 - Each additional role gets its own native session and independently resumed
-  context. Codex roles require an installed/configured local Codex CLI. Claude
-  roles require the Claude CLI. The current host itself needs no additional CLI.
+  context. Each invited role requires its backend's installed/configured local CLI. The current host itself needs no additional CLI.
 - By default, five requested roles means five roles **plus the current host**.
   If the user assigns the current host one of the roles (e.g. architect), use
   `--main-title 架构师 --main-focus ...` and create only the other four in the file.
@@ -61,11 +65,11 @@ for configurable two-person discussions. Supported additional roles: 1–8.
 python3 /path/to/agent-chat/scripts/group.py init \
   --room /shared/new-group.sqlite --cwd /absolute/path/project \
   --briefing-file /shared/briefing.json --roles-file /shared/roles.json \
-  --rounds 3 --minutes 30
+  --main HOST --rounds 3 --minutes 30
 python3 /path/to/agent-chat/scripts/view.py start --room /shared/new-group.sqlite --open
 ```
 
-Default main identity is `codex`, title `主持人`. Initialization validates all
+Set main identity to the actual host; the default title is `主持人`. Initialization validates all
 CLIs before creating the room, saves the configuration and opening briefing, but
 does not call any model. Exact repeated initialization is idempotent; changing
 roles, project, briefing or round budget requires a fresh room. Do not rewrite
@@ -96,7 +100,7 @@ constraints, identify contradictions, and ask roles to respond to one another:
 
 ```bash
 python3 /path/to/agent-chat/scripts/chat.py send \
-  --room /shared/new-group.sqlite --as codex --request-id host-2 \
+  --room /shared/new-group.sqlite --as HOST --request-id host-2 \
   --text-file /shared/host-follow-up.txt
 python3 /path/to/agent-chat/scripts/group.py round \
   --room /shared/new-group.sqlite --request-id discussion-2
@@ -125,7 +129,7 @@ Preserve disagreements and unknowns. Only the original host may propose.
 
 ```bash
 python3 /path/to/agent-chat/scripts/chat.py propose \
-  --room /shared/new-group.sqlite --as codex --request-id host-conclusion-1 \
+  --room /shared/new-group.sqlite --as HOST --request-id host-conclusion-1 \
   --file /shared/conclusion.json
 python3 /path/to/agent-chat/scripts/group.py round \
   --room /shared/new-group.sqlite --request-id review-1

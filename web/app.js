@@ -1,4 +1,8 @@
 'use strict';
+function engineName(backend) {
+  return { codex: 'Codex', claude: 'Claude', pi: 'pi', opencode: 'OpenCode' }[backend] || backend;
+}
+
 const $ = (id) => document.getElementById(id);
 const fragment = location.hash.slice(1);
 if (/^[A-Za-z0-9_-]{40,}$/.test(fragment)) {
@@ -201,13 +205,7 @@ function message(event, data) {
   );
   const content = node('div');
   const meta = node('div', undefined, 'message-meta');
-  const name = role
-    ? role.title
-    : event.sender === 'codex'
-      ? 'Codex'
-      : event.sender === 'claude'
-        ? 'Claude'
-        : event.sender;
+  const name = role ? role.title : engineName(event.sender);
   meta.append(
     node('span', name, 'sender'),
     node(
@@ -215,9 +213,7 @@ function message(event, data) {
       role
         ? role.backend === 'existing'
           ? '当前会话'
-          : role.backend === 'claude'
-            ? 'Claude'
-            : 'Codex'
+          : engineName(role.backend)
         : reviewer
           ? '讨论伙伴'
           : '主参与者',
@@ -440,7 +436,7 @@ function render(data) {
       area.append(assessmentView(s.latest_assessment.body.assessment));
       if (s.continuation_needs_approval)
         area.append(
-          node('p', '请在原 Codex 会话确认追加轮次或时间；确认后恢复原角色会话。', 'muted'),
+          node('p', '请在发起讨论的原会话确认追加轮次或时间；确认后恢复原角色会话。', 'muted'),
         );
       else if (!s.assessment_fresh && !stopped)
         area.append(node('p', '有新发言或审核，下一份草稿前需重新评估。', 'muted'));

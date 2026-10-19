@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start a managed Claude or Codex discussion participant."""
+"""Start a managed discussion participant using a supported local agent CLI."""
 
 import argparse
 import contextlib
@@ -15,6 +15,7 @@ import uuid
 from pathlib import Path
 
 import chat
+import adapters
 
 
 CONCLUSION = {
@@ -114,14 +115,15 @@ def participant_lock(directory):
 
 
 def cli_prefix(executable, backend="claude"):
+    adapters.get(backend)
     found = shutil.which(executable)
     if not found:
         chat.fail(f"{backend.title()} CLI not found. Install/configure its CLI first, or supply --cli with its executable path.")
     path = Path(found).resolve()
     if path.suffix.lower() in (".cmd", ".bat", ".ps1"):
         # Avoid Windows batch quoting/shell interpretation of JSON schema args.
-        entry = "@anthropic-ai/claude-code/cli.js" if backend == "claude" else "@openai/codex/bin/codex.js"
-        candidates = [path.parent / "node_modules" / entry, path.parent.parent / entry]
+        entries = adapters.get(backend).npm_entries
+        candidates = [base / entry for entry in entries for base in (path.parent / "node_modules", path.parent.parent)]
         script = next((p for p in candidates if p.is_file()), None)
         node = shutil.which("node")
         if script is None or node is None:
@@ -160,38 +162,17 @@ def model_response(args, directory, run_directory, info, prompt, turn):
     backend = args.backend
     prefix = cli_prefix(args.cli, backend)
     answer_path = run_directory / f"turn-{turn:03d}.answer.json"
-    if backend == "claude":
-        command = prefix + ["-p", "--output-format", "json", "--json-schema", json.dumps(RESPONSE_SCHEMA),
-                            "--tools", "Read,Glob,Grep", "--allowedTools", "Read,Glob,Grep",
-                            "--permission-mode", "dontAsk", "--strict-mcp-config", "--mcp-config",
-                            '{"mcpServers":{}}', "--max-turns", "12"]
-        if getattr(args, "model", None):
-            command += ["--model", args.model]
-        if info.get("native_session_id"):
-            command += ["--resume", info["native_session_id"]]
-    else:
-        schema_path = run_directory / "response-schema.json"
-        write_json(schema_path, RESPONSE_SCHEMA)
-        # Parent exec flags also apply to resume. Protocol writes happen in this
-        # runner; the model gets a read-only sandbox and no approval bypass.
-        command = prefix + ["exec", "--sandbox", "read-only", "--cd", args.cwd,
-                            "-c", 'approval_policy="never"']
-        if getattr(args, "model", None):
-            command += ["--model", args.model]
-        if info.get("native_session_id"):
-            command += ["resume"]
-        command += ["--json", "--skip-git-repo-check", "--output-schema", str(schema_path),
-                    "--output-last-message", str(answer_path)]
-        if info.get("native_session_id"):
-            command += [info["native_session_id"]]
-        command += ["-"]
+    adapter = adapters.get(backend)
+    command, environment = adapter.command(args, directory, run_directory, info, prefix, answer_path, RESPONSE_SCHEMA)
+    if adapter.prompt_schema:
+        prompt = "Return ONLY one JSON object matching this schema (no commentary outside JSON):\n" + json.dumps(RESPONSE_SCHEMA) + "\n" + prompt
     input_path = run_directory / f"turn-{turn:03d}.prompt.txt"
     input_path.write_text(prompt, encoding="utf-8")
     output_path = run_directory / f"turn-{turn:03d}.result.json"
     error_path = run_directory / f"turn-{turn:03d}.stderr.txt"
     # Prompt text goes through stdin, never through a shell or command argument.
     with input_path.open("rb") as source, output_path.open("wb") as output, error_path.open("wb") as error:
-        process = subprocess.Popen(command, cwd=args.cwd, stdin=source, stdout=output, stderr=error)
+        process = subprocess.Popen(command, cwd=args.cwd, stdin=source, stdout=output, stderr=error, env=environment)
         publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
         until = time.monotonic() + args.turn_timeout
         try:
@@ -211,36 +192,13 @@ def model_response(args, directory, run_directory, info, prompt, turn):
             publish(directory, info, "running", child_pid=None)
     if process.returncode:
         chat.fail(f"{backend.title()} CLI exited with code {process.returncode}; see {error_path} and {output_path}")
-    if backend == "codex":
-        records = [json.loads(line) for line in output_path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
-        if any(not isinstance(row, dict) for row in records):
-            chat.fail(f"invalid Codex JSONL output; see {output_path}")
-        if any(row.get("type") in ("error", "turn.failed") for row in records):
-            chat.fail(f"Codex reported a failed turn; see {output_path}")
-        session = next((row.get("thread_id") for row in records if row.get("type") == "thread.started"),
-                       info.get("native_session_id"))
-        result = json.loads(answer_path.read_text(encoding="utf-8-sig"))
-        if not isinstance(result, dict):
-            chat.fail("Codex returned an invalid structured response")
-        if not isinstance(session, str) or not session or len(session) > 200 or session.startswith("-"):
-            chat.fail("missing or invalid Codex thread ID in result")
-        if info.get("native_session_id") and session != info["native_session_id"]:
-            chat.fail("Codex resumed a different thread; refusing to silently replace context")
-        info["native_session_id"] = session
-        return result
-    envelope = json.loads(output_path.read_text(encoding="utf-8-sig"))
-    if not isinstance(envelope, dict) or envelope.get("is_error"):
-        chat.fail(f"Claude reported an error; see {output_path}")
-    if envelope.get("permission_denials"):
-        chat.fail(f"Claude could not access required resources; see {output_path}")
-    result = envelope.get("structured_output")
-    if not isinstance(result, dict):
-        chat.fail(f"Claude returned no structured_output; update Claude Code or inspect {output_path}")
-    session = envelope.get("session_id")
+    result, session = adapter.parse(output_path, answer_path, directory, info)
     if not isinstance(session, str) or not session or len(session) > 200 or session.startswith("-"):
-        chat.fail("missing or invalid Claude session ID in result")
+        chat.fail(f"missing or invalid {backend} native session ID")
     if info.get("native_session_id") and session != info["native_session_id"]:
-        chat.fail("Claude resumed a different session; refusing to silently replace context")
+        chat.fail(f"{backend} resumed a different session; refusing to silently replace context")
+    if not isinstance(result, dict):
+        chat.fail(f"{backend} returned an invalid structured response")
     info["native_session_id"] = session
     return result
 
@@ -386,7 +344,7 @@ def main():
         p.add_argument("--as", dest="agent", required=True)
         if name in ("start", "_worker"):
             p.add_argument("--cwd", required=True, help="project directory for the model to inspect")
-            p.add_argument("--backend", choices=["claude", "codex"], default="claude")
+            p.add_argument("--backend", choices=adapters.BACKENDS, default="claude")
             p.add_argument("--cli", help="backend executable, not a shell command")
             p.add_argument("--turn-timeout", type=int, default=180)
         if name == "_worker":

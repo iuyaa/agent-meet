@@ -1,27 +1,27 @@
 # Agent Chat · 保留当前会话的多角色讨论
 
-在一个已经聊了很久的 Codex 会话中，一句话邀请 Claude 讨论。
-**当前 Codex 保留主参与者身份和已有上下文，担任讨论主持人。**
-Claude 每次完成一轮回复，结果作为工具返回交给当前 Codex。后续追问恢复同一个
-Claude 会话，最后由原 Codex 结合长期背景总结共识、分歧和待验证问题。
+在已经聊了很久的 Codex、Claude Code、pi 或 OpenCode 会话里，邀请其它 agent 讨论。
+**谁发起，谁保留当前会话和上下文、担任主持人。** 被邀请者逐轮回复，主持人结合原有背景
+追问、判断和总结；后续调用及追加讨论恢复各参与者原来的原生会话。
 
-**v0.5 新增本地群聊页面**：实时展示双方发言、上下文简报、结论及审核状态，
-可以停止讨论、下载完整记录。追问仍从原 Codex 会话发起。
-v0.7 新增结束前评估及原房间续聊；保留消息折叠、按轮次讨论、自定义角色及并行参与。
-角色默认全部使用 Claude，也可分别指定 Codex/Claude；每个角色保留独立的原生会话。
+v0.8 把主持人和调用后端分开，双人及多角色模式支持 Codex、Claude、pi、OpenCode。
+例如 Claude 主持、Codex 参与；pi 主持、OpenCode 参与；一个群混用四种 agent。
+角色默认仍使用 Claude，可逐角色指定其它后端。保留结束前评估、由用户决定追加、
+原房间续聊、Markdown、消息折叠及本地群聊页面。
 
-Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并配置好登录/服务。
-当前 Codex 可以来自桌面应用，默认不要求另装 Codex CLI。不依赖 Golutra。
+Python 3.9+，仅用标准库。不依赖 Golutra。只有发起端需要此 skill；被邀请端需要
+已安装并登录/配置好的 CLI。主持人只需能读取技能、写文件和等待 Python 工具返回，
+不要求另装自己的 CLI。其它宿主满足这些能力也可主持；尚未适配的 CLI 不能直接作为被调用端。
 
 ## 获取和更新
 
-[下载 v0.7.0 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.7.0.zip?raw=true)。
+[下载 v0.8.0 ZIP](https://github.com/iuyaa/golutra/blob/feat/agent-chat-skill/skills/agent-chat/releases/agent-chat-v0.8.0.zip?raw=true)。
 解压后用其中的 `agent-chat` 文件夹替换已有 skill。
 
-**保留原来的长会话。** 更新后让当前 Codex 重新读取更新后的 SKILL.md；
+**保留原来的长会话。** 更新后让当前主持人重新读取更新后的 SKILL.md；
 不要为了加载新版本而新建一个没有历史的聊天。例如：
 
-> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.7 流程操作。
+> 重新读取 `/absolute/path/agent-chat/SKILL.md`，按 v0.8 流程操作。
 > 保留你当前会话的上下文，和 Claude 讨论一下 glp-content 的 agent 应该怎么改。
 
 正常加载新版 skill 后，也可以继续使用：
@@ -29,10 +29,11 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 > $agent-chat 和 Claude 讨论一下，glp-content 的 agent 应该怎么改。
 
 项目安装位置可使用 `.agents/skills/agent-chat/`（Codex）或
-`.claude/skills/agent-chat/`（Claude Code）。也可以直接指定任意位置的 SKILL.md。
-默认只需发起窗口能读取 skill；被调用的 Claude 不需要再安装一份。
+`.claude/skills/agent-chat/`（Claude Code）、`.pi/skills/agent-chat/`（pi）、
+`.opencode/skills/agent-chat/`（OpenCode）。也可以直接指定任意位置的 SKILL.md。
+默认只需发起窗口能读取 skill；被调用的 agent 不需要再安装一份。
 
-如果已有 v0.5 页面服务运行，更新后先用 `view.py close --room ...` 关闭页面服务，
+如果已有旧版页面服务运行，更新后先用 `view.py close --room ...` 关闭页面服务，
 再用 `view.py start --room ... --open` 打开同一讨论。只关闭浏览器标签不会更新服务代码。
 已有讨论记录和模型会话不受影响。
 
@@ -41,14 +42,14 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 可以直接在发起时用自然语言要求，不需要手写配置：
 
 > $agent-chat 讨论 glp-content 的 agent 改造方案，最多 3 轮。
-> 当前 Codex 主持，请产品经理、架构师、开发、用户、业务负责人五个角色参加。
+> 由你主持，请产品经理、架构师、开发、用户、业务负责人五个角色参加。
 > 默认全部 Claude；架构师使用 Codex。最后给出共识、分歧和待验证问题。
 
 角色的名称、关注点和使用的 CLI 后端独立设置。未指定时全部用 Claude。
 想全部使用 Claude，去掉最后的“架构师使用 Codex”即可。分配给 Codex 的额外角色需要
 本机配置好 Codex CLI，当前主持人可以继续来自桌面应用。
 
-默认是“原 Codex 主持 + 5 个角色”，共 6 个参与者。如果希望原 Codex 本人兼任架构师，
+上面的五角色示例是“主持人 + 指定的 5 个角色”，共 6 个参与者。如果希望原主持人本人兼任架构师，
 直接说“你担任架构师并主持，其余 4 个角色参加”。用户角色是模拟使用者视角。
 
 **一轮 = 主持人提出问题 + 每个角色各回复一次**。最多 3 轮、5 个额外角色，
@@ -63,7 +64,7 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 ![五角色讨论演示，使用模拟 CLI](examples/group-preview.png)
 
 上图来自模拟 CLI 进程，未调用真实模型。每轮在同一个前台工具执行中并行调用各角色，
-返回后仍由原 Codex 结合长期背景继续判断。结论需每个角色明确审核接受才标记全体确认；
+返回后仍由原主持人结合长期背景继续判断。结论需每个角色明确审核接受才标记全体确认；
 有人反对、超时或无回复都会保留对应状态。
 
 ## 限制用完后继续讨论
@@ -76,7 +77,7 @@ Python 3.9+，仅使用标准库；默认只需要本机 Claude CLI 已安装并
 
 > 延长十分钟，继续原讨论。
 
-原 Codex 保留长对话，各角色恢复原生会话 ID，消息、简报、旧结论和审核都留在原记录里。
+原主持人保留长对话，各角色恢复原生会话 ID，消息、简报、旧结论和审核都留在原记录里。
 旧结论作为历史保留，追加讨论后不会继续被当作当前全体结论；本次结果需重新审核。
 v0.6 的已有房间也能原地使用，不用迁移或初始化新房间。
 
@@ -91,29 +92,47 @@ python3 /absolute/path/agent-chat/scripts/chat.py extend --room /absolute/path/w
 ```
 
 `assess` 结构见 [examples/assessment.json](examples/assessment.json)。新建前台讨论在没有有效
-“可以总结”评估时会拒绝草稿，新发言或审核后需重评。评估由原 Codex 作出，工具验证记录
+“可以总结”评估时会拒绝草稿，新发言或审核后需重评。评估由原主持人作出，工具验证记录
 和结构，不能替代事实核查。角色会话无法恢复时明确报错，不悄悄新建替代会话。
 
 仅追加轮次但时间已过，会续上 10 分钟；仅延时且轮次也已用完，会加一轮。
 如只想延长重新评估和审核的时间，显式指定 `--rounds 0 --minutes 10`。
 运行中先等调用结束或停止后再追加。完整规则见 [续聊说明](references/continuation.md)。
 
+## 选择主持人与参与者
+
+主持人、角色、后端是三个独立设置：角色是职责，后端是运行这个角色的 agent，
+主持人是当前发起讨论的会话。常见请求可以这样写：
+
+> 在当前 Claude 会话使用 agent-chat，请 Codex 评审这个方案，保留当前上下文。
+>
+> 在当前 pi 会话使用 agent-chat，请产品经理用 Claude、架构师用 Codex、
+> 开发用 OpenCode 讨论三轮；你继续主持。
+
+双人初始化显式设置 `--main claude --backend codex` 即可反向调用；
+`--main pi --backend opencode` 则由 pi 邀请 OpenCode。`--reviewer` 可另设身份，
+`--model` 可指定该 CLI 支持的模型。多角色配置逐项设置 `backend`，无需更换主持人。
+旧房间未保存 backend 时继续按 Claude 读取，不改动已有会话。
+
+详见 [调用适配与宿主说明](references/agent-adapters.md)。下面仍以 Codex 邀请 Claude 为例；
+其它宿主应把 `--main` 和所有 `--as` 换成自己的实际身份，并选对 `--backend`。
+
 ## 默认流程
 
-1. 当前 Codex 从已有上下文整理简报：问题、目标、当前判断、约束、已有决策、否决方案、代码依据和未知信息。
-2. 工具保存可查看的简报，并把它作为当前 Codex 的开场消息。
-3. 打开本地群聊页面；当前 Codex 调用 Claude 一次，并保持工具执行等待其返回。
+1. 当前主持人从已有上下文整理简报：问题、目标、当前判断、约束、已有决策、否决方案、代码依据和未知信息。
+2. 工具保存可查看的简报，并把它作为当前主持人的开场消息。
+3. 打开本地群聊页面；当前主持人调用 Claude 一次，并保持工具执行等待其返回。
 4. Claude 读取简报和相关项目文件，回复观点、依据或疑问。
-5. 原 Codex 结合原有长对话追问、反驳或补充信息；下一次调用恢复同一个 Claude 会话。
-6. 原 Codex 先评估是否可结束；可以总结时提交结论草稿，Claude 审核后导出记录。需要追加时先说明理由，由你决定。
+5. 原主持人结合原有长对话追问、反驳或补充信息；下一次调用恢复同一个 Claude 会话。
+6. 原主持人先评估是否可结束；可以总结时提交结论草稿，Claude 审核后导出记录。需要追加时先说明理由，由你决定。
 
-**简报不是完整历史的自动复制。** 它保存本次讨论需要的背景摘录；原 Codex 始终负责
+**简报不是完整历史的自动复制。** 它保存本次讨论需要的背景摘录；原主持人始终负责
 结合未写入简报的长期上下文把关。Claude 可指出材料缺失，不应假定自己知道全部历史。
 双方同意某份记录也不能代替事实验证。
 
-正常讨论在同一个用户回合内，通过「工具执行 → 返回结果 → 原 Codex 继续」推进。
+正常讨论在同一个用户回合内，通过「工具执行 → 返回结果 → 原主持人继续」推进。
 无需复制邀请语，也不应要求你再发送「继续」。若宿主工具返回运行中的执行 ID，
-Codex 应等待同一个执行完成。如果宿主确实结束了整个回合，skill 无法强制唤醒该 UI。
+主持人应等待同一个执行完成。如果宿主确实结束了整个回合，skill 无法强制唤醒该 UI。
 
 ## 工具入口
 
@@ -121,7 +140,7 @@ Codex 应等待同一个执行完成。如果宿主确实结束了整个回合�
 八个字段都必须提供，不知道的列表可以为空，不应编造已有决策。
 
 ```bash
-python3 /absolute/path/agent-chat/scripts/consult.py init --room /absolute/path/work/new-discussion.sqlite --cwd /absolute/path/project --briefing-file /absolute/path/work/briefing.json
+python3 /absolute/path/agent-chat/scripts/consult.py init --room /absolute/path/work/new-discussion.sqlite --cwd /absolute/path/project --briefing-file /absolute/path/work/briefing.json --main codex --backend claude
 python3 /absolute/path/agent-chat/scripts/view.py start --room /absolute/path/work/new-discussion.sqlite --open
 python3 /absolute/path/agent-chat/scripts/consult.py reply --room /absolute/path/work/new-discussion.sqlite --request-id claude-1
 ```
@@ -130,7 +149,7 @@ python3 /absolute/path/agent-chat/scripts/consult.py reply --room /absolute/path
 简报保存在 `ROOM.sqlite.consult/briefing.json` 和 `briefing.md`，你可以直接查看。
 `reply` 只执行一次 Claude 调用，返回并记录这一轮回复，不运行后台聊天循环。
 
-原 Codex 判断回复后，如需追问，先写好 UTF-8 消息文件，再执行：
+原主持人判断回复后，如需追问，先写好 UTF-8 消息文件，再执行：
 
 ```bash
 python3 /absolute/path/agent-chat/scripts/chat.py send --room /absolute/path/work/new-discussion.sqlite --as codex --request-id main-2 --text-file /absolute/path/work/follow-up.txt
@@ -162,7 +181,7 @@ Windows 可用 `py -3` 替代 `python3`，路径含空格时加引号；原生 C
 
 - **停止讨论**：先提示确认，再关闭讨论并取消正在执行的模型调用，已有消息保留。
 - **导出记录**：下载 Markdown 快照，包含全部原话、草案及实际审核状态。
-- **继续追问**：在原 Codex 会话输入，保留其已有上下文。
+- **继续追问**：在原主持人会话输入，保留其已有上下文。
 
 不需要安装 Node、前端依赖或 Golutra。`start` 自动选择本机空闲端口，重复执行复用
 已运行的页面；`--open` 尝试打开默认浏览器，也会返回完整本地链接。
@@ -182,7 +201,7 @@ python3 /absolute/path/agent-chat/scripts/view.py close --room /absolute/path/wo
 
 ## 结论与检查
 
-原 Codex 使用 `chat.py propose` 提交草案，再用一次 `consult.py reply` 让 Claude 审核。
+原主持人使用 `chat.py propose` 提交草案，再用一次 `consult.py reply` 让 Claude 审核。
 结论必须引用双方真实消息，可保留分歧和待确认问题。具体命令见 SKILL.md。
 审核未通过的草案不会被标为共识；超时、报错、无回复也不算同意。
 
@@ -198,7 +217,8 @@ python3 /absolute/path/agent-chat/scripts/chat.py export --room /absolute/path/w
 `ROOM.sqlite.consult/`，运行中调用的状态位于 `ROOM.sqlite.peers/`。
 讨论目录应放在版本控制外；工具不会改写项目配置或用户登录信息。
 
-默认讨论只启用 Claude 的 Read/Glob/Grep，通信写入由 Python 工具处理。
+讨论通过各适配器限制项目写入能力，通信写入由 Python 工具处理。pi 禁用扩展及技能；
+OpenCode 使用独立讨论 agent 的只读工具权限，2.x 每次调用使用独立服务，避免复用旧配置。
 模型调用使用现有 CLI 的模型配置和账户，工具本身不提供模型访问。
 
 ## 可选模式与版本变化
@@ -220,8 +240,8 @@ python3 -m unittest discover -s tests -v
 另以 Chromium 验证实时消息、结论、导出、停止、断线提示及窄屏布局。
 可选浏览器验证见 VALIDATION.md；安装使用 skill 不需要这些浏览器测试依赖。
 
-当前环境有 Codex CLI，没有 Claude Code CLI；真实 Codex ↔ Claude 端到端联调和
-Windows 实机启动尚未验证。模型结论的事实正确性也需要结合项目证据判断。
+当前环境只有 Codex CLI，未配置 Claude/pi/OpenCode；真实模型之间的端到端联调及
+Windows 实机启动尚未验证。新增适配按上游接口并以模拟 CLI 验证，仍需在你的本机完成真实联调。模型结论的事实正确性也需要结合项目证据判断。
 更多验证记录见 VALIDATION.md。
 
 ## 文件与许可
@@ -232,7 +252,8 @@ Windows 实机启动尚未验证。模型结论的事实正确性也需要结合
 - `scripts/lifecycle.py`：结束前评估、原房间追加和旧结论历史边界。
 - `scripts/chat.py`：消息、草案、审核和导出。
 - `scripts/view.py`、`web/`：本地服务和群聊页面。
-- `scripts/peer.py`、`scripts/discuss.py`：CLI 适配与可选后台模式。
+- `scripts/adapters.py`：四种 CLI 的参数、输出和原生会话适配注册表。
+- `scripts/peer.py`、`scripts/discuss.py`：公共进程控制与可选后台模式。
 - `examples/briefing.json`、`examples/conclusion.json`：输入结构示例。
 - `references/alternative-modes.md`：可选模式说明。
 

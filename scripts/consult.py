@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the existing main agent and call Claude once per tool execution."""
+"""Keep the existing main agent and call one configured reviewer per tool execution."""
 
 import argparse
 import hashlib
@@ -76,17 +76,20 @@ def snapshot(room, config):
 
 
 def initialize(args):
+    args.backend = getattr(args, "backend", "claude")
+    args.cli = args.cli or args.backend
+    args.reviewer = args.reviewer or (args.backend if args.main != args.backend else args.backend + "-peer")
     briefing = load_briefing(args.briefing_file)
     opening = render_briefing(briefing)
     root = directory(args.room)
     cwd = str(Path(args.cwd).resolve())
     if (root / "config.json").exists():
         config = configuration(args.room)
-        if (config["briefing"], config["cwd"], config["main"], config["reviewer"]) != (
-                briefing, cwd, args.main, args.reviewer):
+        if (config["briefing"], config["cwd"], config["main"], config["reviewer"], config.get("backend", "claude"), config.get("model")) != (
+                briefing, cwd, args.main, args.reviewer, args.backend, args.model):
             chat.fail("this consultation has different context or identities; choose a new room path")
         return {"already_initialized": True, **status(args.room)}
-    peer.cli_prefix(args.cli, "claude")
+    peer.cli_prefix(args.cli, args.backend)
     if not Path(cwd).is_dir():
         chat.fail("project directory does not exist")
     with peer.participant_lock(root):
@@ -98,7 +101,7 @@ def initialize(args):
         for name in (args.main, args.reviewer):
             chat.join(argparse.Namespace(room=args.room, agent=name))
         config = {"mode": "existing-main", "main": args.main, "reviewer": args.reviewer,
-                  "cwd": cwd, "cli": str(Path(shutil.which(args.cli)).resolve()), "briefing": briefing}
+                  "backend": args.backend, "model": args.model, "cwd": cwd, "cli": str(Path(shutil.which(args.cli)).resolve()), "briefing": briefing}
         peer.write_json(root / "config.json", config)
         (root / "briefing.md").write_text(opening + "\n", encoding="utf-8")
         peer.write_json(root / "briefing.json", briefing)
@@ -113,7 +116,7 @@ def status(room):
     config = configuration(room)
     current, _ = snapshot(room, config)
     return {"mode": "existing-main", "main": config["main"], "reviewer": config["reviewer"],
-            "briefing_file": str(directory(room) / "briefing.md"), "briefing": config["briefing"],
+            "backend": config.get("backend", "claude"), "briefing_file": str(directory(room) / "briefing.md"), "briefing": config["briefing"],
             "model": model_state(room), "status": current,
             "next_action": "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
             "finish or explicitly extend on the user's continuation request" if current["phase"] == "closed" else
@@ -149,10 +152,10 @@ def reply(args):
                 peer.publish(root, info, "idle")
             return {"event": existing, "duplicate": True, **status(args.room)}
         if current["phase"] == "closed":
-            chat.fail("discussion is closed; export it instead of calling Claude")
+            chat.fail("discussion is closed; export it instead of calling the reviewer")
         if current["epoch"] and not info.get("native_session_id"):
             if info.get("next_turn", 1) > 1 or any(e["sender"] == config["reviewer"] and e["kind"] == "message" for e in events):
-                chat.fail("cannot recover Claude's original native session; refusing to start a replacement")
+                chat.fail("cannot recover the reviewer's original native session; refusing to start a replacement")
         if info["pending_request"] and info["pending_request"] != request_id:
             peer.publish(root, info, "failed", pending_request=None,
                          detail="an earlier call was interrupted; its result is not confirmed")
@@ -182,7 +185,7 @@ def reply(args):
             run_directory = root / ("turn-" + str(turn))
             run_directory.mkdir()
             model_info = {"mode": "foreground-consultation", "native_session_id": info["native_session_id"]}
-            namespace = argparse.Namespace(room=args.room, agent=config["reviewer"], backend="claude",
+            namespace = argparse.Namespace(room=args.room, agent=config["reviewer"], backend=config.get("backend", "claude"), model=config.get("model"),
                                           cli=config["cli"], cwd=config["cwd"], turn_timeout=args.turn_timeout)
             context = {"your_identity": config["reviewer"], "main_identity": config["main"],
                        "project_directory": config["cwd"], "topic": current["topic"],
@@ -203,7 +206,7 @@ def reply(args):
         try:
             latest, latest_events = snapshot(args.room, config)
             if max((e["id"] for e in latest_events), default=0) != cached["input_event_id"]:
-                chat.fail("discussion changed while Claude was responding; no stale reply was recorded")
+                chat.fail("discussion changed while the reviewer was responding; no stale reply was recorded")
             applied = peer.apply_response(argparse.Namespace(room=args.room, agent=config["reviewer"]), root,
                                           cached["result"], allowed, "consult-" + digest, 0, latest)
             info.update(native_session_id=cached["native_session_id"], read_cursor=cached["read_cursor"],
@@ -228,8 +231,10 @@ def main():
             p.add_argument("--cwd", required=True)
             p.add_argument("--briefing-file", required=True)
             p.add_argument("--main", default="codex")
-            p.add_argument("--reviewer", default="claude")
-            p.add_argument("--cli", default="claude")
+            p.add_argument("--reviewer", help="distinct identity; defaults to backend or backend-peer")
+            p.add_argument("--backend", choices=peer.adapters.BACKENDS, default="claude")
+            p.add_argument("--cli", help="backend executable path, not a shell command")
+            p.add_argument("--model", help="optional model supported by the selected CLI")
             p.add_argument("--max-messages", type=int, default=12)
             p.add_argument("--minutes", type=float, default=10)
         elif name == "reply":

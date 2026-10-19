@@ -2,9 +2,22 @@
 
 运行环境：Linux、Python 3.12；工具仅使用 Python 标准库。
 
-执行 `python3 -m unittest discover -s tests -v`：76 项测试通过，其中原通信协议 14 项、
+执行 `python3 -m unittest discover -s tests -v`：88 项测试通过，其中原通信协议 14 项、
 保留主会话的前台调用 9 项、单参与者 9 项、双边托管及 Codex 包装脚本 7 项、
-本地页面服务 8 项、多角色协议及并行调用 15 项、续聊与结束前评估 14 项。
+本地页面服务 8 项、多角色协议及并行调用 15 项、续聊与结束前评估 14 项、跨 agent 调用适配 12 项。
+
+v0.8 跨 agent 主持与调用验证：
+
+- Claude 主持并邀请 Codex，追问时恢复同一个 Codex ID，没有新建替代主持人。
+- pi 主持邀请 OpenCode、OpenCode 主持邀请 pi；轮次耗尽后经用户明确追加，恢复原 ID 并完成草案审核。
+- 同群混用 Claude、Codex、pi、OpenCode，仍支持并行逐轮回复及原房间续聊。
+- pi 实际复用显式会话文件；文件缺失、ID 不符、畸形回复、截断回复均拒绝写入虚假消息。
+- OpenCode 1.x / 2.x 分别验证 run 参数、原 ID 恢复、只读配置和 2.x 独立服务；忽略先前工具步骤的说明文字，只解析最后一条助手回复。
+- 新后端继续使用统一超时和进程清理；已有 OPENCODE_CONFIG_CONTENT 冲突时拒绝覆盖。
+- 旧 consult 配置缺少 backend 时按 Claude 读取；同种 agent 主持和参与采用不同身份；pi 新旧 npm 包 Windows 入口均有模拟验证。
+- 原有两个 Chromium 浏览器检查继续验证消息、折叠、评估、追加、审核、导出及窄屏。
+
+本节使用模拟 CLI 子进程验证，未调用真实 Claude/pi/OpenCode 模型。按上游源码实现的接口仍需用户本机版本和账户联调；不是四种 agent 的真实环境认证。
 
 v0.7 续聊与结束前评估验证：
 

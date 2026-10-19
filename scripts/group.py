@@ -173,8 +173,8 @@ def load_roles(path, main_id, main_title, main_focus):
         for key in ("title", "focus"):
             role[key] = chat.nonempty(role[key], key)
         role.setdefault("backend", "claude")
-        if role["backend"] not in ("claude", "codex"):
-            chat.fail("role backend must be claude or codex")
+        if role["backend"] not in peer.adapters.BACKENDS:
+            chat.fail("role backend must be one of: " + ", ".join(peer.adapters.BACKENDS))
         role.setdefault("cli", role["backend"])
         role["cli"] = chat.nonempty(role["cli"], "cli")
         peer.cli_prefix(role["cli"], role["backend"])
