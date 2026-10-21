@@ -138,3 +138,8 @@ pi, OpenCode or your configured label). Being host never requires a new host CLI
 New discussions normally live in their own project `.agent-meet/` subdirectory.
 This does not change existing room locations. Resume with the original room path;
 do not prepare a new directory or run init to continue an old discussion.
+
+A reviewed draft awaiting host reconciliation is `phase=finalizing`. Follow
+[finalization](finalization.md) to process every review before publishing a final
+conclusion. User-approved continuation invalidates that current draft/final result
+without deleting any history. Clarification alone consumes no extra round.

@@ -250,14 +250,46 @@ let browser;
   );
   const confirmed = await round('review-revision');
   assert.equal(confirmed.status.conclusion_status, 'confirmed');
+  assert.equal(confirmed.status.phase, 'finalizing');
+  await page.waitForFunction(
+    () => document.getElementById('phase').textContent === '待整理最终结论',
+  );
+  assert.match(await page.locator('#outcome').innerText(), /等待主持人整理/);
+  const finalFile = path.join(root, 'final.json');
+  const finalBody = {
+    proposal_id: confirmed.status.latest_proposal.id,
+    review_ids: confirmed.status.reviews.map((r) => r.id),
+    change_type: 'none',
+    conclusion: confirmed.status.latest_proposal.body,
+    resolutions: confirmed.status.reviews.map((r) => ({
+      review_id: r.id,
+      point: r.body.comment,
+      disposition: 'already_covered',
+      resolution: '逐角色核对审核意见，原稿已记录各角色观点，无需改动。',
+    })),
+  };
+  fs.writeFileSync(finalFile, JSON.stringify(finalBody));
+  command(
+    'chat.py',
+    'finalize',
+    '--as',
+    'codex',
+    '--request-id',
+    'final-group',
+    '--file',
+    finalFile,
+  );
+
   await page.waitForFunction(() =>
-    document.getElementById('outcome').textContent.includes('全体角色已确认'),
+    document.getElementById('outcome').textContent.includes('最终结论 · 已处理最后审核意见'),
   );
   const downloadPromise = page.waitForEvent('download');
   await page.locator('#export').click();
   const download = await downloadPromise;
   const report = fs.readFileSync(await download.path(), 'utf8');
   assert.match(report, /全部角色已确认记录/);
+  assert.match(report, /最后审核意见处理/);
+  assert.equal(finalBody.resolutions.length, 5);
   assert.match(report, /轮次：3 \/ 3 轮完成/);
   assert.match(report, /续聊次数：1/);
   roles.forEach((role) => assert.ok(report.includes(role.title)));
@@ -274,7 +306,7 @@ let browser;
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   assert.deepEqual(errors, []);
   console.log(
-    'Group browser checks passed: readiness, user-approved continuation reuses five original sessions, rounds, fold persistence, all-role reviews, export, privacy and mobile. Fake CLIs only.',
+    'Group browser checks passed: all-role finalization, readiness, user-approved continuation reuses five original sessions, rounds, fold persistence, all-role reviews, export, privacy and mobile. Fake CLIs only.',
   );
 })()
   .catch((error) => {

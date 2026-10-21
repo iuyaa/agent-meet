@@ -248,12 +248,26 @@ python3 /path/to/agent-meet/scripts/consult.py reply \
   --room ROOM --request-id peer-review-1
 ```
 
-The reply now reviews the pending proposal. Acceptance closes the room; it means
-the record represents both views accurately, not that every recommendation is
-correct or every disagreement is resolved. Rejection preserves the draft and
-specific corrections. Revise under a new request ID or ask a clarifying question
-if the message/time budget permits, or request an approved continuation. At most four proposals per continuation period are allowed; after
-four rejected drafts, stop and export the differences rather than force agreement.
+The reply now reviews the pending proposal. Acceptance confirms that the draft
+accurately records the peer's view; it does not close a foreground discussion yet.
+Read [final review reconciliation](references/finalization.md) and follow it.
+You MUST process the complete last reply and EVERY role's feedback point, save a
+`chat.py finalize` event, verify `finalization_status=finalized`, then export and
+report that saved final conclusion. Save its exact conclusion object as
+DISCUSSION_DIR/final-conclusion.json; link this file and the new export, not the
+earlier draft conclusion.json. No participant callback is needed for simple
+clarification. Material corrections require a fresh assessment, revised proposal
+and re-review by the same native sessions. Do not treat an accept label as permission
+to skip a correction or claim the host's new wording was itself reviewed.
+
+Rejection preserves the draft and objections. Reassess before proposing a revision.
+At most four proposals per continuation period are allowed; after four rejected
+drafts, stop and export the differences rather than force agreement.
+
+```bash
+python3 /path/to/agent-meet/scripts/chat.py finalize \
+  --room ROOM --as HOST --request-id final-1 --file DISCUSSION_DIR/finalization.json
+```
 
 ```bash
 python3 /path/to/agent-meet/scripts/chat.py export \
@@ -261,9 +275,11 @@ python3 /path/to/agent-meet/scripts/chat.py export \
 ```
 
 Exports contain the context briefing in the opening message, full exchange,
-conclusion, evidence IDs, agreements/disagreements, unknowns and review status.
+the final saved conclusion, review resolutions, evidence IDs, agreements/disagreements,
+unknowns and actual review/finalization status. Unfinished exports are labelled snapshots.
 Use a fresh export filename. Report the conclusion from this existing conversation
-and distinguish confirmed records from unconfirmed/disputed drafts. Do not end
+from latest_finalization, and distinguish finalized results from reviewed-but-unfinalized
+drafts and disputed proposals. Do not end
 the user turn merely because initialization or one reviewer call succeeded.
 
 ## Limits and errors

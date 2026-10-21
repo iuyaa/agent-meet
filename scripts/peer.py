@@ -55,6 +55,9 @@ and an empty conclusion (summary='', all lists=[]).
 For propose: populate conclusion with summary, explicit agreements, remaining
 disagreements, open_questions and real evidence_message_ids from BOTH authors.
 Never invent peer messages, facts or consensus. Leave text='' and decision='none'.
+For review: any correction that changes the factual claims, constraints or recommended
+plan requires reject and a revised proposal. Nonblocking suggestions may accompany
+accept; the host must explicitly reconcile each feedback point before finalization.
 For review: use decision='accept' only if the pending draft accurately records
 both views, including any remaining disagreements. Otherwise reject and explain
 specific corrections in text. Use an empty conclusion. Acceptance confirms the

@@ -110,6 +110,18 @@ class GroupTests(unittest.TestCase):
         path.write_text(json.dumps(body), encoding="utf-8")
         return self.command("chat.py", "propose", "--as", "codex", "--request-id", request, "--file", path, **kwargs)
 
+    def finalize(self, request="final"):
+        status = self.command("chat.py", "status")["status"]
+        body = {"proposal_id": status["latest_proposal"]["id"],
+                "review_ids": [r["id"] for r in status["reviews"]], "change_type": "none",
+                "conclusion": status["latest_proposal"]["body"],
+                "resolutions": [{"review_id": r["id"], "point": r["body"]["comment"],
+                                  "disposition": "already_covered", "resolution": "逐角色核对，原稿已记录审核意见，无需改动。"}
+                                 for r in status["reviews"]]}
+        path = self.root / (request + ".json")
+        path.write_text(json.dumps(body), encoding="utf-8")
+        return self.command("chat.py", "finalize", "--as", "codex", "--request-id", request, "--file", path)
+
     def test_five_roles_keep_distinct_native_sessions_and_see_previous_round(self):
         initialized = self.initialize()
         self.assertEqual(initialized["status"]["participants"], ["codex"] + [r["id"] for r in self.roles])
@@ -154,7 +166,7 @@ class GroupTests(unittest.TestCase):
         for i, role in enumerate(self.roles):
             reviewed = self.command("chat.py", "review", "--as", role["id"], "--request-id", "review",
                                     "--proposal", proposal, "--decision", "accept", "--text", "准确记录了本角色观点")
-            self.assertEqual(reviewed["status"]["phase"] == "closed", i == 4)
+            self.assertEqual(reviewed["status"]["phase"], "finalizing" if i == 4 else "summarizing")
             self.assertEqual(reviewed["status"]["conclusion_status"] == "confirmed", i == 4)
 
     def test_rejection_is_not_overridden_by_majority_and_revision_can_be_reviewed(self):
@@ -170,6 +182,8 @@ class GroupTests(unittest.TestCase):
         mode.unlink()
         accepted = self.run_round("review-2")
         self.assertEqual(accepted["status"]["conclusion_status"], "confirmed")
+        self.assertEqual(accepted["status"]["phase"], "finalizing")
+        self.finalize()
         self.assertEqual(accepted["status"]["completed_rounds"], 1)
         output = self.root / "report.md"
         self.command("chat.py", "export", "--output", output)

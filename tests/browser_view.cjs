@@ -232,7 +232,7 @@ let browser;
   assert.match(await page.locator('#outcome').innerText(), /尚未确认/);
   assert.equal(await page.locator('#outcome strong').innerText(), '真实讨论');
   assert.equal(await page.locator('#outcome code').innerText(), 'Markdown');
-  command(
+  const reviewed = command(
     'chat.py',
     'review',
     '--as',
@@ -244,10 +244,45 @@ let browser;
     '--decision',
     'accept',
     '--text',
-    '**确认**：准确记录了双方观点和未验证问题。',
+    '**确认**：准确记录了双方观点和未验证问题。\n\n最后补充：压缩后的上下文需要验证。',
   );
+  await page.waitForFunction(
+    () => document.getElementById('phase').textContent === '待整理最终结论',
+  );
+  assert.match(await page.locator('#outcome').innerText(), /等待主持人整理/);
+  assert.equal(await page.locator('#stop').isDisabled(), false);
+  const finalFile = path.join(root, 'final.json');
+  const finalSummary = proposal.summary + '\n\n最后补充：压缩后的上下文需要验证。';
+  fs.writeFileSync(
+    finalFile,
+    JSON.stringify({
+      proposal_id: proposed.event.id,
+      review_ids: [reviewed.event.id],
+      change_type: 'clarification',
+      conclusion: { ...proposal, summary: finalSummary },
+      resolutions: [
+        {
+          review_id: reviewed.event.id,
+          point: '准确记录了双方观点和未验证问题。',
+          disposition: 'already_covered',
+          resolution: '保留原有共识与待验证边界。',
+        },
+        {
+          review_id: reviewed.event.id,
+          point: '压缩后的上下文需要验证。',
+          disposition: 'incorporated',
+          resolution: '最后补充已写入最终结论，等待验证。',
+        },
+      ],
+    }),
+  );
+  command('chat.py', 'finalize', '--as', 'codex', '--request-id', 'final-one', '--file', finalFile);
   await page.waitForFunction(() => document.getElementById('phase').textContent === '已确认记录');
-  assert.match(await page.locator('.proposal-label').innerText(), /已确认记录/);
+  assert.match(await page.locator('#outcome').innerText(), /最后补充：压缩后的上下文需要验证。/);
+  assert.match(await page.locator('#outcome').innerText(), /最后审核意见处理/);
+  assert.match(await page.locator('#outcome').innerText(), /措辞未再次送审/);
+
+  assert.match(await page.locator('.message.proposal .proposal-label').innerText(), /已确认记录/);
   assert.equal(await page.locator('.message.review strong').innerText(), '确认');
   assert.equal(await page.locator('#stop').isDisabled(), true);
   const downloadPromise = page.waitForEvent('download');
@@ -255,6 +290,8 @@ let browser;
   const download = await downloadPromise;
   const report = fs.readFileSync(await download.path(), 'utf8');
   assert.match(report, /双方已确认/);
+  assert.ok(report.includes(finalSummary));
+  assert.match(report, /最后审核意见处理/);
   assert.match(report, /真实模型和 Windows/);
   assert.ok(report.includes('**建议**'));
   assert.ok(report.includes(sampleCode));
@@ -317,7 +354,7 @@ let browser;
   assert.deepEqual(errors, []);
   assert.deepEqual(remoteRequests, []);
   console.log(
-    'Browser checks passed: Markdown formatting/code/tables/links, context/review, XSS and unsafe URLs, no remote subresources, raw export, live updates, mobile, stop/disconnect. Scripted data only; no model calls.',
+    'Browser checks passed: last-review reconciliation and final conclusion/export consistency, Markdown formatting/code/tables/links, context/review, XSS and unsafe URLs, no remote subresources, raw export, live updates, mobile, stop/disconnect. Scripted data only; no model calls.',
   );
 })()
   .catch((error) => {

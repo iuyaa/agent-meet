@@ -39,6 +39,9 @@ or fabricate user research. Ask for missing information and cite real evidence.
 Return exactly ONE structured response, using only allowed_actions.
 For send: put your substantive role-specific view in text, decision='none',
 and an empty conclusion (summary='', all lists=[]).
+For review: any correction that changes the factual claims, constraints or recommended
+plan requires reject and a revised proposal. Nonblocking suggestions may accompany
+accept; the host must explicitly reconcile each feedback point before finalization.
 For review: accept only if the host's proposal accurately records your view,
 including remaining disagreements and unverified points. Otherwise reject and
 explain corrections in text. Keep conclusion empty. Accepting a record does
@@ -135,6 +138,8 @@ def append(conn, args):
             if not parent or parent["kind"] != "message" or parent["sender"] == args.agent:
                 chat.fail("reply-to must reference another participant's message")
     elif kind == "proposal":
+        if current["phase"] == "finalizing" and time.time() >= conn.execute("SELECT expires FROM room").fetchone()[0]:
+            chat.fail("review window expired; request more time before submitting a substantive revision")
         lifecycle.require_conclusion(conn, current)
         if args.agent != current["main"]:
             chat.fail("only the original host may propose a conclusion")
@@ -244,7 +249,8 @@ def status(room):
         workers[role["id"]] = {key: info[key] for key in ("state", "detail") if key in info}
     return {"room": str(Path(room).resolve()), "mode": "group", "status": current, "briefing": settings["briefing"],
             "main": settings["main"]["id"], "roles": public_roles(settings), "workers": workers,
-            "next_action": "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
+            "next_action": "original host must reconcile every review and call chat.py finalize" if current["phase"] == "finalizing" and not current["continuation_needs_approval"] else
+            "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
             "finish or explicitly extend on the user's continuation request" if current["phase"] == "closed" else
             "call pending roles" if current["pending_reviewers"] or
             any(r["id"] in current["pending_speakers"] for r in settings["roles"]) else

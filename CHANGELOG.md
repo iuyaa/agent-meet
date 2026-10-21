@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0 — Final review reconciliation
+
+- Accepted foreground drafts now wait for host reconciliation before closing.
+- Added chat.py finalize, current-review coverage, quoted feedback points, per-point dispositions and an immutable final conclusion.
+- Page, export and skill instructions use the saved final conclusion; clarification wording is labelled as host reconciliation, while substantive changes require re-review.
+- Existing rooms/native sessions are retained. Original manual/background protocol behavior is unchanged.
+- Reorganized README around scenarios and quick start; moved detailed commands and development notes into docs.
+
 ## 0.9.0 — Project-local discussions
 
 - New consult/group rooms default to PROJECT/.agent-meet/TIMESTAMP-TOPIC-ID/discussion.sqlite.

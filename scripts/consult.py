@@ -120,7 +120,8 @@ def status(room):
     return {"room": str(Path(room).resolve()), "mode": "existing-main", "main": config["main"], "reviewer": config["reviewer"],
             "backend": config.get("backend", "claude"), "briefing_file": str(directory(room) / "briefing.md"), "briefing": config["briefing"],
             "model": model_state(room), "status": current,
-            "next_action": "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
+            "next_action": "original host must reconcile every review and call chat.py finalize" if current["phase"] == "finalizing" and not current["continuation_needs_approval"] else
+            "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
             "finish or explicitly extend on the user's continuation request" if current["phase"] == "closed" else
             "original main assesses, follows up or concludes after the tool result"}
 

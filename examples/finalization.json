@@ -1,0 +1,20 @@
+{
+  "proposal_id": 4,
+  "review_ids": [5],
+  "change_type": "clarification",
+  "conclusion": {
+    "summary": "原方案保持不变，补充最后审核提出的验证边界。",
+    "agreements": ["保留已审核的方案与约束"],
+    "disagreements": [],
+    "open_questions": ["压缩后能否保留纠正，需要实际验证"],
+    "evidence_message_ids": [1, 2]
+  },
+  "resolutions": [
+    {
+      "review_id": 5,
+      "point": "请补充压缩后的验证。",
+      "disposition": "incorporated",
+      "resolution": "已写入最终说明的待验证事项，方案本身不变。"
+    }
+  ]
+}

@@ -144,11 +144,19 @@ python3 /path/to/agent-meet/scripts/group.py round \
 ```
 
 The same round command now asks every pending role to review this proposal.
-Only all roles explicitly accepting marks the record confirmed. One acceptance,
+Only all roles explicitly accepting marks the DRAFT reviewed; it then enters
+`finalizing` until the original host reconciles all review feedback and saves a final conclusion. One acceptance,
 a majority, no response or timeout is insufficient. One rejection keeps the
 record disputed. Wait for all reviews before revising; address the objections
 and reassess before a new draft under a new ID, at most four drafts per continuation period. Approval means
 the record reflects the role's view, not that all advice is factually validated.
+
+After all accepts, follow [final review reconciliation](finalization.md), including
+the last role's complete response. Record explicit dispositions per point, then
+call `chat.py finalize`. Page, export and the final host answer must use that saved
+final conclusion. If feedback changes the substantive plan, reassess and re-review
+with the original sessions first. A majority or a generic acknowledgement cannot
+replace this step.
 
 Use `chat.py export/stop/read` as in SKILL.md. Reads are paginated; follow
 `next_after` until `has_more` is false. The viewer shows role titles, engines,

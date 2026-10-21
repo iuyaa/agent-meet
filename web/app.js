@@ -176,6 +176,26 @@ function conclusion(body) {
   el.append(refs);
   return el;
 }
+function reviewResolutions(body) {
+  const el = node('div', undefined, 'review-resolutions');
+  const labels = {
+    incorporated: '已采纳',
+    already_covered: '原文已覆盖',
+    not_adopted: '未采纳',
+    follow_up: '后续验证',
+  };
+  el.append(node('h3', '最后审核意见处理'));
+  for (const item of body.resolutions) {
+    el.append(
+      node('h4', '#' + item.review_id + ' · ' + labels[item.disposition]),
+      markdown(item.point),
+      markdown(item.resolution),
+    );
+  }
+  if (body.change_type === 'clarification')
+    el.append(node('p', '基于已审核草案补充说明；主持人整理后的措辞未再次送审。', 'muted'));
+  return el;
+}
 function assessmentView(value) {
   const el = node('div', undefined, 'structured');
   el.append(
@@ -238,7 +258,14 @@ function message(event, data) {
   const bubble = node('div', undefined, 'bubble');
   const body = node('div', undefined, 'message-body');
   body.id = 'body-' + event.id;
-  if (event.kind === 'assessment') {
+  if (event.kind === 'finalization') {
+    const historical = data.status.latest_finalization?.id !== event.id;
+    body.append(
+      node('div', historical ? '历史最终结论' : '最终结论 · 已处理最后审核意见', 'proposal-label'),
+      conclusion(event.body.conclusion),
+      reviewResolutions(event.body),
+    );
+  } else if (event.kind === 'assessment') {
     body.append(
       node('div', '主持人结束前评估', 'decision-label'),
       assessmentView(event.body.assessment),
@@ -283,7 +310,14 @@ function message(event, data) {
     body.append(
       node(
         'span',
-        historical ? '历史草案 · 已进入追加讨论' : '结论草案 · ' + label,
+        historical
+          ? '历史草案 · 已进入追加讨论'
+          : '结论草案 · ' +
+              (data.status.finalization_required &&
+              data.status.latest_proposal?.id === event.id &&
+              data.status.finalization_status === 'pending'
+                ? '已审核，待主持人处理最后意见'
+                : label),
         'proposal-label',
       ),
       conclusion(event.body),
@@ -363,7 +397,11 @@ function render(data) {
     : '长消息可折叠查看';
   $('count').textContent = s.message_count + ' / ' + s.max_messages + ' 条发言';
   let activity;
-  if (stopped) {
+  if (s.continuation_needs_approval) {
+    activity = '主持人建议继续 · 等待用户决定是否追加讨论';
+  } else if (s.phase === 'finalizing') {
+    activity = '草案已审核 · 等待主持人处理最后意见并保存最终结论';
+  } else if (stopped) {
     activity =
       s.close_reason === 'agreement'
         ? isGroup
@@ -372,8 +410,6 @@ function render(data) {
         : s.close_reason === 'expired'
           ? '讨论期限已到 · 未确认的草案仍保留原状态'
           : '讨论已停止 · 已有记录已保留';
-  } else if (s.continuation_needs_approval) {
-    activity = '主持人建议继续 · 等待用户决定是否追加讨论';
   } else if (isGroup) {
     activity = active.length
       ? active.map(([id]) => display(id)).join('、') + ' 正在回复…'
@@ -402,15 +438,18 @@ function render(data) {
     'busy',
     !stopped && (active.length > 0 || model.state === 'calling' || worker.state === 'thinking'),
   );
-  $('phase').textContent = stopped
-    ? s.close_reason === 'agreement'
-      ? '已确认记录'
-      : s.close_reason === 'expired'
-        ? '已超时'
-        : '已停止'
-    : s.phase === 'summarizing'
-      ? '总结中'
-      : '讨论中';
+  $('phase').textContent =
+    s.phase === 'finalizing'
+      ? '待整理最终结论'
+      : stopped
+        ? s.close_reason === 'agreement'
+          ? '已确认记录'
+          : s.close_reason === 'expired'
+            ? '已超时'
+            : '已停止'
+        : s.phase === 'summarizing'
+          ? '总结中'
+          : '讨论中';
   $('phase').classList.toggle('closed', stopped);
   const error =
     !stopped &&
@@ -495,7 +534,13 @@ function render(data) {
     }
     lastBriefing = briefSig;
   }
-  const outcomeSig = JSON.stringify([s.latest_proposal, s.latest_review, s.phase]);
+  const outcomeSig = JSON.stringify([
+    s.latest_proposal,
+    s.reviews,
+    s.latest_review,
+    s.latest_finalization,
+    s.phase,
+  ]);
   if (outcomeSig !== lastOutcome) {
     const out = $('outcome');
     out.replaceChildren();
@@ -512,9 +557,20 @@ function render(data) {
           disputed: '有角色异议 · 尚未全体确认',
         });
       out.append(
-        node('div', labels[s.conclusion_status], 'outcome-status ' + s.conclusion_status),
-        conclusion(s.latest_proposal.body),
+        node(
+          'div',
+          s.latest_finalization
+            ? '最终结论 · 已处理最后审核意见'
+            : s.finalization_status === 'pending'
+              ? '草案已审核 · 等待主持人整理'
+              : labels[s.conclusion_status],
+          'outcome-status ' + s.conclusion_status,
+        ),
+        conclusion(
+          s.latest_finalization ? s.latest_finalization.body.conclusion : s.latest_proposal.body,
+        ),
       );
+      if (s.latest_finalization) out.append(reviewResolutions(s.latest_finalization.body));
       if (isGroup)
         out.prepend(
           node(

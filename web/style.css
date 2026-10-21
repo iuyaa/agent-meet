@@ -293,7 +293,8 @@ h1 {
   margin-bottom: 11px;
   white-space: pre-wrap;
 }
-.message.proposal .bubble {
+.message.proposal .bubble,
+.message.finalization .bubble {
   background: #eef3e8;
   border-color: #d4dfc7;
 }

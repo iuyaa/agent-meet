@@ -82,7 +82,7 @@ def database(path, write=False):
 def event(row):
     result = dict(row)
     result["created"] = utc(result["created"])
-    if result["kind"] in ("proposal", "review", "assessment", "extension"):
+    if result["kind"] in ("proposal", "review", "assessment", "extension", "finalization"):
         result["body"] = json.loads(result["body"])
     return result
 
@@ -136,6 +136,10 @@ def identity(conn, name):
 
 
 def next_action(status, name):
+    if status.get("continuation_needs_approval"):
+        return "await_extension" if name == status.get("main", status["participants"][0]) else "wait"
+    if status.get("finalization_status") == "pending" and status["phase"] == "finalizing":
+        return "finalize" if name == status.get("main", status["participants"][0]) else "wait"
     if status.get("mode") == "group":
         if status["phase"] == "closed":
             return "export"
@@ -202,7 +206,10 @@ def body_text(args):
 
 
 def proposal_body(conn, args):
-    data = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    return validate_conclusion(conn, json.loads(Path(args.file).read_text(encoding="utf-8-sig")))
+
+
+def validate_conclusion(conn, data):
     required = {"summary", "agreements", "disagreements", "open_questions", "evidence_message_ids"}
     if not isinstance(data, dict) or set(data) != required:
         fail("proposal must contain exactly: " + ", ".join(sorted(required)))
@@ -265,6 +272,8 @@ def append(args):
                 if not parent or parent["kind"] != "message" or parent["sender"] == args.agent:
                     fail("reply-to must reference the other participant's discussion message")
         elif kind == "proposal":
+            if status["phase"] == "finalizing" and time.time() >= conn.execute("SELECT expires FROM room").fetchone()[0]:
+                fail("review window expired; request more time before submitting a substantive revision")
             import lifecycle
             lifecycle.require_conclusion(conn, status)
             if pending:
@@ -343,13 +352,29 @@ def export(args):
         for role in status["roles"]:
             lines += [f"- {role['id']}：{role['title']} · {role['backend']}；{role['focus']}"]
         lines += ["", "审核进度：" + str(len(status["reviews"])) + " / " + str(len(status["roles"]) - 1), ""]
-    lines.extend(["## 讨论结果", "", labels[status["conclusion_status"]], ""])
+    final = status.get("latest_finalization")
+    result_label = labels[status["conclusion_status"]]
+    if status.get("finalization_status") == "pending":
+        result_label = "草案已审核；最后审核意见待主持人处理，尚无最终结论"
+    elif final:
+        result_label += "；主持人已处理全部审核意见并保存最终结论"
+    lines.extend(["## 讨论结果", "", result_label, ""])
     if proposal:
-        body = proposal["body"]
-        lines.extend([f"草案 #{proposal['id']}，作者：{proposal['sender']}", "", body["summary"], ""])
+        body = final["body"]["conclusion"] if final else proposal["body"]
+        lines.extend([f"最终结论 #{final['id']}，基于草案 #{proposal['id']}" if final else
+                      f"草案 #{proposal['id']}，作者：{proposal['sender']}", "", body["summary"], ""])
+        if final and final["body"]["change_type"] == "clarification":
+            lines += ["主持人整理稿：基于已审核草案补充说明，整理后的措辞未再次送审。", ""]
         for key, label in (("agreements", "共识"), ("disagreements", "分歧"), ("open_questions", "待确认问题")):
             lines.extend([f"### {label}", ""] + ["- " + v for v in body[key]] + ([] if body[key] else ["未列出"]) + [""])
         lines.extend(["依据消息：" + ", ".join("#" + str(i) for i in body["evidence_message_ids"]), ""])
+    if final:
+        import finalization
+        disposition_labels = dict(zip(finalization.DISPOSITIONS, ("已采纳", "原文已覆盖", "未采纳", "后续验证")))
+        lines += ["## 最后审核意见处理", ""]
+        for item in final["body"]["resolutions"]:
+            lines += [f"### 审核 #{item['review_id']} · {disposition_labels[item['disposition']]}", "",
+                      item["point"], "", item["resolution"], ""]
     lines.extend(["## 完整记录", ""])
     if status.get("latest_assessment"):
         assessment = status["latest_assessment"]["body"]["assessment"]
@@ -369,18 +394,18 @@ def export(args):
     # Keep prior exports intact; choose a different filename to refresh a snapshot.
     with output.open("x", encoding="utf-8") as handle:
         handle.write("\n".join(lines))
-    return {"output": str(output), "event_count": len(events), "conclusion_status": status["conclusion_status"]}
+    return {"output": str(output), "event_count": len(events), "conclusion_status": status["conclusion_status"], "finalization_status": status["finalization_status"]}
 
 
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     sub = result.add_subparsers(dest="command", required=True)
-    for name in ("create", "join", "status", "send", "read", "wait", "propose", "review", "stop", "export", "assess", "extend"):
+    for name in ("create", "join", "status", "send", "read", "wait", "propose", "review", "stop", "export", "assess", "extend", "finalize"):
         p = sub.add_parser(name)
         p.add_argument("--room", required=True, help="absolute path of the shared SQLite discussion file")
-        if name in ("join", "send", "read", "wait", "propose", "review", "assess", "extend"):
+        if name in ("join", "send", "read", "wait", "propose", "review", "assess", "extend", "finalize"):
             p.add_argument("--as", dest="agent", required=True)
-        if name in ("send", "propose", "review", "assess", "extend"):
+        if name in ("send", "propose", "review", "assess", "extend", "finalize"):
             p.add_argument("--request-id", required=True, help="reuse unchanged on retries")
         if name in ("send", "review"):
             group = p.add_mutually_exclusive_group(required=True)
@@ -397,7 +422,7 @@ def parser():
             p.add_argument("--after", type=int, default=0)
             if name == "wait":
                 p.add_argument("--timeout", type=float, default=25)
-        elif name in ("propose", "assess"):
+        elif name in ("propose", "assess", "finalize"):
             p.add_argument("--file", required=True, help="UTF-8 conclusion JSON")
         elif name == "review":
             p.add_argument("--proposal", type=int, required=True)
@@ -416,12 +441,13 @@ def parser():
 
 def main(argv=None):
     import lifecycle
+    import finalization
     import peer
     args = parser().parse_args(argv)
     handlers = {"create": create, "join": join, "status": get_status,
                 "send": append, "read": read, "wait": read, "propose": append,
                 "review": append, "stop": stop, "export": export,
-                "assess": lifecycle.assess, "extend": lifecycle.extend}
+                "assess": lifecycle.assess, "extend": lifecycle.extend, "finalize": finalization.finalize}
     try:
         result = handlers[args.command](args)
         print(json.dumps({"ok": True, **result}, ensure_ascii=False, indent=2))

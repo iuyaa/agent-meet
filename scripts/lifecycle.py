@@ -48,7 +48,8 @@ def enrich(conn, value):
                  latest_extension=chat.event(conn.execute("SELECT * FROM events WHERE kind='extension' ORDER BY id DESC LIMIT 1").fetchone()) if info["anchor"] else None)
     value["continuation_needs_approval"] = bool(fresh and value["assessment_status"] == "continue" and value["phase"] != "discussing"
                                                  and not str(value["close_reason"] or "").startswith("stopped:"))
-    return value
+    import finalization
+    return finalization.enrich(conn, value)
 
 
 def require_conclusion(conn, value):
