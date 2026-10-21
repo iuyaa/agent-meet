@@ -19,6 +19,7 @@ The repository root is also the skill root.
 | `scripts/storage.py` | Separate project-local discussion directories and Git ignore rules |
 | `scripts/adapters.py` | Command construction and output parsing for Claude, Codex, pi, and OpenCode |
 | `scripts/peer.py` | Shared process control, timeouts, stopping, and native ID validation |
+| `scripts/processes.py` | Console-free Windows launches and POSIX background session policy |
 | `scripts/view.py`, `web/` | Local viewer service and message display |
 
 `conclusion_status` continues to indicate whether a draft has been accepted in review.

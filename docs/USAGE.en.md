@@ -167,6 +167,12 @@ The URL contains the room's access token; keep the part after `#`. Frontend file
 The service binds only to `127.0.0.1` for browsers on the same machine.
 Remote environments need a local tunnel supported by the host; otherwise use the CLI and exports. The service does not automatically expose itself publicly.
 
+On Windows, internal viewer, worker, and CLI launches suppress new console windows.
+On Linux and macOS, these entry points do not launch a terminal application.
+The viewer stays running after discussion completion for reading history; that does not mean a model call is still active.
+Run Python entry points directly through the host's command tool, without wrapping them in `Start-Process`, `cmd /k`, or a new terminal.
+If a leftover window belongs to an older viewer service, an upgrade does not replace it automatically: close that service, then start it with the updated version.
+
 The page remains viewable after the discussion ends. Closing the browser tab does not stop the discussion; neither does closing the viewer service:
 
 ```bash

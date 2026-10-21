@@ -41,6 +41,10 @@ you explain its reason; do not add rounds or time automatically.
 Resolve script paths relative to this SKILL.md. Resolve the project directory
 from the user's task. Use absolute paths; quote paths with spaces. On Windows,
 `py -3` may replace `python3`.
+Run the Python entry points directly in the host's foreground command tool. Do
+not wrap them in `Start-Process`, `cmd /k`, `start`, or a new terminal window.
+The viewer and optional workers manage their own background processes; on
+Windows, their internal launches suppress console allocation.
 
 By default store each NEW discussion under the target PROJECT's `.agent-meet/`,
 not the skill install directory and not a temporary folder. Prepare its directory

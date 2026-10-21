@@ -4,7 +4,15 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
-`python3 -m unittest discover -s tests -v` passed **115 tests**: 14 for the original communication protocol, 9 for foreground calls preserving the host conversation, 9 for a single invited participant, 7 for bilateral orchestration and Codex wrappers, 8 for the local viewer service, 15 for multi-role protocol and parallel calls, 14 for continuation and readiness assessment, 12 for cross-agent adapters, 12 for project-local storage, and 15 for review finalization.
+`python3 -m unittest discover -s tests -v` passed **118 tests**: 14 for the original communication protocol, 9 for foreground calls preserving the host conversation, 9 for a single invited participant, 7 for bilateral orchestration and Codex wrappers, 8 for the local viewer service, 15 for multi-role protocol and parallel calls, 14 for continuation and readiness assessment, 12 for cross-agent adapters, 12 for project-local storage, 15 for review finalization, and 3 for cross-platform process launches.
+
+## v0.10.1: console-free Windows launches
+
+- The viewer, optional background workers, model calls, and CLI capability probes use a shared launch policy.
+- Simulated Windows constants verify that foreground and background launches use `CREATE_NO_WINDOW`, without `DETACHED_PROCESS` or `CREATE_NEW_CONSOLE`, which would override it.
+- Native Python subprocesses on Linux verify that foreground calls retain the original session, background calls receive a separate session, output remains readable, and processes exit normally.
+- All 118 regression tests passed, including native ID reuse, stop/timeout cancellation, and viewer shutdown and restart. No real models were called.
+- Windows and macOS are unavailable in this environment, so window behavior has not been verified on those systems. A native Windows console check is included for execution on Windows. Older viewer services must be closed and restarted with the new version; they are not replaced automatically.
 
 ## Command installation compatibility
 

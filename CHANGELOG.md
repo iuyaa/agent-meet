@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1 — Console-free Windows launches
+
+- Centralized subprocess launch options for the viewer, optional background workers, agent calls, and CLI capability probes.
+- Windows uses `CREATE_NO_WINDOW`, without the incompatible `DETACHED_PROCESS` flag; background launches retain their own process groups. POSIX foreground and background session behavior is unchanged.
+- Documented direct host-tool invocation and closing/restarting older viewer services. The viewer remains available after discussions for reading and export.
+- Added launch-policy regression checks and a native Python subprocess check. Actual Windows/macOS window behavior still needs verification on those systems.
+
 ## 0.10.0 — Final review reconciliation
 
 - Accepted foreground drafts now wait for host reconciliation before closing.

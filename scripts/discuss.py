@@ -13,6 +13,7 @@ from pathlib import Path
 
 import chat
 import peer
+import processes
 
 TERMINAL = {"completed", "failed", "stopped", "expired"}
 
@@ -132,10 +133,9 @@ def start(args):
                 "room": config["room"], "cwd": cwd, "report_path": str(report)}
         peer.publish(root, info, "starting")
     command = [sys.executable, str(Path(__file__).resolve()), "_worker", "--room", config["room"]]
-    options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS} if os.name == "nt" else {"start_new_session": True}
     with (root / "controller.log").open("wb") as log:
         process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-                                   close_fds=True, **options)
+                                   close_fds=True, **processes.launch_options(background=True))
     ready = root / "ready.json"
     until = time.monotonic() + 12
     while not ready.exists() and process.poll() is None and time.monotonic() < until:

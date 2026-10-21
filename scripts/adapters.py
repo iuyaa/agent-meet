@@ -6,6 +6,7 @@ import re
 import subprocess
 
 import chat
+import processes
 
 
 def write_json(path, value):
@@ -86,7 +87,7 @@ def probe(prefix, flag, cwd):
     try:
         result = subprocess.run(prefix + [flag], stdin=subprocess.DEVNULL,
                                 capture_output=True, text=True, encoding="utf-8",
-                                timeout=10, cwd=cwd)
+                                timeout=10, cwd=cwd, **processes.launch_options())
     except subprocess.TimeoutExpired:
         chat.fail("agent CLI capability check timed out; inspect its installation")
     if result.returncode:

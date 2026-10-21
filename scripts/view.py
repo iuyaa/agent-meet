@@ -22,6 +22,7 @@ import chat
 import consult
 import group
 import peer
+import processes
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 ASSETS = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css",
@@ -216,12 +217,11 @@ def start(args):
         duplicate = bool(info)
         if not info:
             run_id = secrets.token_hex(12)
-            kwargs = {"start_new_session": True} if os.name != "nt" else {
-                "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS}
             with (root / "server.log").open("ab") as log:
                 process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "_serve",
                                             "--room", str(Path(args.room).resolve()), "--run-id", run_id],
-                                           stdin=subprocess.DEVNULL, stdout=log, stderr=log, **kwargs)
+                                           stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                           **processes.launch_options(background=True))
             deadline = time.monotonic() + 8
             while time.monotonic() < deadline:
                 if process.poll() is not None:

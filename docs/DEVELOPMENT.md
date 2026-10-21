@@ -19,6 +19,7 @@ Meet 使用 Python 标准库、SQLite 和本地静态页面。无需 Golutra 应
 | `scripts/storage.py` | 项目内独立讨论目录及 Git 忽略 |
 | `scripts/adapters.py` | Claude、Codex、pi、OpenCode 的命令和输出适配 |
 | `scripts/peer.py` | 公共进程控制、超时、停止及原生 ID 校验 |
+| `scripts/processes.py` | Windows 无控制台启动、POSIX 后台会话策略 |
 | `scripts/view.py`、`web/` | 本地网页服务与消息展示 |
 
 `conclusion_status` 继续表达草案是否获审核接受；前台讨论获全体接受后进入

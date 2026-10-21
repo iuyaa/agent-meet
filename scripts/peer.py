@@ -16,6 +16,7 @@ from pathlib import Path
 
 import chat
 import adapters
+import processes
 
 
 CONCLUSION = {
@@ -175,7 +176,8 @@ def model_response(args, directory, run_directory, info, prompt, turn):
     error_path = run_directory / f"turn-{turn:03d}.stderr.txt"
     # Prompt text goes through stdin, never through a shell or command argument.
     with input_path.open("rb") as source, output_path.open("wb") as output, error_path.open("wb") as error:
-        process = subprocess.Popen(command, cwd=args.cwd, stdin=source, stdout=output, stderr=error, env=environment)
+        process = subprocess.Popen(command, cwd=args.cwd, stdin=source, stdout=output, stderr=error,
+                                   env=environment, **processes.launch_options())
         publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
         until = time.monotonic() + args.turn_timeout
         try:
@@ -320,10 +322,9 @@ def start(args):
     command = [sys.executable, str(Path(__file__).resolve()), "_worker", "--room", str(Path(args.room).resolve()),
                "--as", args.agent, "--cwd", str(cwd), "--cli", args.cli,
                "--backend", args.backend, "--turn-timeout", str(args.turn_timeout), "--run-id", run_id]
-    launch_options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS} if os.name == "nt" else {"start_new_session": True}
     with (directory / (run_id + ".launch.log")).open("wb") as log:
         process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-                                   close_fds=True, **launch_options)
+                                   close_fds=True, **processes.launch_options(background=True))
     ready = directory / (run_id + ".ready.json")
     until = time.monotonic() + 5
     while not ready.exists() and process.poll() is None and time.monotonic() < until:
