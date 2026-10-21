@@ -1,4 +1,4 @@
-# Meet
+# Agent-Meet
 
 在当前会话里，让不同 AI agent 一起讨论问题。
 
@@ -17,18 +17,16 @@ $agent-meet 请 Claude 评审这个方案，重点检查边界和失败路径。
 需要 Python 3.9+，以及受邀 agent 已安装并配置好的本地 CLI。
 只有发起端需要安装 skill；原主持人不需要另开一个 CLI 会话。
 
-[下载 v0.10.0 安装包](https://github.com/iuyaa/agent-meet/raw/refs/tags/v0.10.0/releases/agent-meet-v0.10.0.zip)，
-解压后把 `agent-meet` 文件夹放入发起端的 skill 目录：
+在需要使用的项目目录执行，按提示选择发起端：
 
-| 发起端 | 项目内安装位置 |
-| --- | --- |
-| Codex | `.agents/skills/agent-meet/` |
-| Claude Code | `.claude/skills/agent-meet/` |
-| pi | `.pi/skills/agent-meet/` |
-| OpenCode | `.opencode/skills/agent-meet/` |
+```bash
+npx skills add iuyaa/agent-meet --skill agent-meet
+```
 
-也可以克隆到对应目录，或让当前 agent 直接读取任意位置的 `agent-meet/SKILL.md`。
-它需要能读写文件、执行 Python 命令并等待工具返回。
+默认安装到当前项目，跨项目使用可加 `-g`。命令安装需要 Node.js 22.20+，
+使用现成的 Skills CLI 从仓库安装，不需要手动下载和解压。
+安装后仍需发起端能读写文件、执行 Python 命令并等待工具返回。
+指定宿主、更新及手动安装方式见[安装说明](docs/INSTALLATION.md)。
 
 保留你正在使用的会话，让它读取该文件，然后直接提出讨论要求。
 安装、发现方式因宿主版本而异，Codex 可用 `$agent-meet`；其它宿主也可直接指定技能名称或路径。
@@ -106,6 +104,7 @@ $agent-meet 请产品经理、架构师和业务负责人讨论这个需求，�
 
 ## 更多说明
 
+- [安装与更新](docs/INSTALLATION.md)：命令安装、全局安装、宿主选择及手动方式。
 - [操作指南](docs/USAGE.md)：角色、轮次、续聊、页面和底层命令。
 - [技能操作规约](SKILL.md)：供主持 agent 执行的完整流程。
 - [最后审核意见与最终结论](references/finalization.md)：归档规则及输入格式。

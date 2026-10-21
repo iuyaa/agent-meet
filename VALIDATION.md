@@ -6,6 +6,15 @@
 保留主会话的前台调用 9 项、单参与者 9 项、双边托管及 Codex 包装脚本 7 项、
 本地页面服务 8 项、多角色协议及并行调用 15 项、续聊与结束前评估 14 项、跨 agent 调用适配 12 项、项目内存储 12 项、审核收尾 15 项。
 
+命令安装兼容性验证（Skills CLI 1.7.4 / Node.js 24.19.0）：
+
+- 从公开 GitHub 仓库执行 `skills add iuyaa/agent-meet --skill agent-meet --list`，正确发现唯一技能 agent-meet。
+- 在隔离的临时项目执行 `npx skills@1.7.4 add iuyaa/agent-meet --skill agent-meet -a codex claude-code opencode pi --yes --copy`，安装器接受全部四个目标。
+- 实际生成共享 `.agents/skills/agent-meet` 及 Claude 项目的 `.claude/skills/agent-meet`；脚本、网页资源、SKILL.md 及适配文档与源文件逐字节一致。
+- 默认符号链接模式和 `--copy` 模式均安装成功；共享目录及 Claude 链接入口均可启动 CLI。
+- 从安装目录执行 storage prepare 与 consult init 成功，验证运行不依赖原仓库路径；未调用真实模型。
+- 安装器缓存、状态及项目均在临时目录中，关闭遥测。没有执行全局安装或修改用户已有技能。
+
 v0.10 审核后收尾与最终结论验证：
 
 - 双人及多角色草案获接受后进入 finalizing，等待原主持人处理全部当前审核，不提前标记讨论完成。
