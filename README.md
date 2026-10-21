@@ -1,5 +1,7 @@
 # Agent-Meet
 
+简体中文 · [English](README.en.md)
+
 在当前会话里，让不同 AI agent 一起讨论问题。
 
 遇到需要第二种判断或多个角色参与的问题时，向当前 agent 发起讨论。

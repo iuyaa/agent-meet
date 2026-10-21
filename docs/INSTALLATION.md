@@ -1,5 +1,7 @@
 # 安装与更新
 
+简体中文 · [English](INSTALLATION.en.md)
+
 [返回首页](../README.md)
 
 只有发起讨论的 agent 需要安装本技能。受邀参与者需要配置好各自 CLI，

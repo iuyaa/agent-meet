@@ -6,7 +6,9 @@ description: Discuss across Codex, Claude, pi and OpenCode, with any of them hos
 # Meet
 
 This skill is named `agent-meet` (formerly `agent-chat`). Keep existing discussion
-rooms and native session state when upgrading; see [migration](MIGRATION.md).
+rooms and native session state when upgrading; see [migration](MIGRATION.en.md).
+
+User documentation: [简体中文](README.md) · [English](README.en.md).
 
 **Default: YOU remain the main participant in this existing conversation.**
 Use `scripts/consult.py` to call one selected agent for ONE reply per foreground tool execution.

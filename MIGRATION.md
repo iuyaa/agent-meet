@@ -1,5 +1,7 @@
 # 从 Agent Chat 迁移到 Meet
 
+简体中文 · [English](MIGRATION.en.md)
+
 产品名为 **Meet**，仓库和 skill 为 **agent-meet**，调用名为 `$agent-meet`。
 v0.8.1 是独立项目与命名迁移，保持 v0.8 的讨论行为。
 

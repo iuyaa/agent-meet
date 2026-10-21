@@ -1,5 +1,7 @@
 # Meet 操作指南
 
+简体中文 · [English](USAGE.en.md)
+
 [返回首页](../README.md) · [技能操作规约](../SKILL.md) · [审核收尾](../references/finalization.md)
 
 首页提供安装和自然语言示例。本页保留角色配置、续聊及底层命令说明。

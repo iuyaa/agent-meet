@@ -1,5 +1,7 @@
 # 验证记录
 
+简体中文 · [English](VALIDATION.en.md)
+
 运行环境：Linux、Python 3.12；工具仅使用 Python 标准库。
 
 执行 `python3 -m unittest discover -s tests -v`：115 项测试通过，其中原通信协议 14 项、

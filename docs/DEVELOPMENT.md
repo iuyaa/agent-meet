@@ -1,5 +1,7 @@
 # Meet 开发说明
 
+简体中文 · [English](DEVELOPMENT.en.md)
+
 [返回首页](../README.md) · [操作指南](USAGE.md)
 
 Meet 使用 Python 标准库、SQLite 和本地静态页面。无需 Golutra 应用或前端构建。
