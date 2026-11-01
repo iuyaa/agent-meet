@@ -71,6 +71,21 @@ Adding only rounds after time has expired also grants ten minutes. Adding only t
 To extend only the time for reassessment and review, explicitly use `--rounds 0 --minutes 10`.
 Wait for an active call to finish, or stop it, before extending. See [continuation](../references/continuation.md) for the full rules.
 
+## Context compaction or session-resumption failures
+
+Inspect the failed call's stderr, JSON result, and configured CLI version first.
+Distinguish compaction errors from timeouts, usage limits, and authentication.
+After a group extension, each role receives full visible history once, then only
+events after its cursor while resuming the same native session. Smaller repeat
+input does not compact the native history already accumulated.
+
+Claude supports `/compact` within its original session; recovery depends on the
+installed version and actual error. This version has no in-place native-session
+handoff command. User approval does not justify clearing IDs or changing the
+database to bypass validation. Preserve discussion evidence, other roles' successful
+replies, and open issues. See [session failures](../references/session-failures.md)
+for log locations and recovery boundaries.
+
 ## Choose the host and participants
 
 The host, role, and backend are separate settings. A role describes responsibility, a backend is the agent running that role, and the host is the current initiating conversation.

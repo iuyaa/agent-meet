@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.2 — Incremental context after continuation
+
+- Fixed group continuation replaying the entire transcript on every subsequent role call. Each role now receives a full replay once per extension, then only unseen events in the same native session.
+- Preserve history replay for interrupted rounds, frozen round snapshots, native IDs, and complete stored/exported records. Successful retries cannot roll back the recorded history epoch.
+- Added session-failure diagnosis and clarified that native compaction belongs to the CLI. An in-place native-session handoff is not implemented; user approval alone does not make it available.
+- This reduces redundant prompt growth; it does not repair an already-failed Claude compaction or establish the cause of a particular CLI failure.
+
 ## 0.10.1 — Console-free Windows launches
 
 - Centralized subprocess launch options for the viewer, optional background workers, agent calls, and CLI capability probes.

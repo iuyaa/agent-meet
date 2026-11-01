@@ -4,7 +4,15 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
-`python3 -m unittest discover -s tests -v` passed **118 tests**: 14 for the original communication protocol, 9 for foreground calls preserving the host conversation, 9 for a single invited participant, 7 for bilateral orchestration and Codex wrappers, 8 for the local viewer service, 15 for multi-role protocol and parallel calls, 14 for continuation and readiness assessment, 12 for cross-agent adapters, 12 for project-local storage, 15 for review finalization, and 3 for cross-platform process launches.
+`python3 -m unittest discover -s tests -v` passed **119 tests**: 14 for the original communication protocol, 9 for foreground calls preserving the host conversation, 9 for a single invited participant, 7 for bilateral orchestration and Codex wrappers, 8 for the local viewer service, 15 for multi-role protocol and parallel calls, 15 for continuation and readiness assessment, 12 for cross-agent adapters, 12 for project-local storage, 15 for review finalization, and 3 for cross-platform process launches.
+
+## v0.10.2: incremental context after continuation
+
+- A new regression reproduced full-history repetition on subsequent calls after an extension before the fix, and passed afterward.
+- Each role receives full visible history on its first call after an extension, then only events after its cursor. A further extension permits another replay while retaining the original native ID throughout.
+- Original messages remain intact. Replaying an earlier successful request cannot roll back the saved history epoch.
+- All 119 tests passed, including interrupted-round continuation, shared snapshots, failed-call retries, and session ID validation. All model output came from simulated CLIs.
+- This did not reproduce a real Claude compaction failure. The original CLI error, version, and local session still require separate diagnosis.
 
 ## v0.10.1: console-free Windows launches
 

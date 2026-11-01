@@ -306,7 +306,8 @@ def call_role(args, role, settings, batch, digest):
         if existing:
             if cached and cached.get("native_session_id") and batch["input_after"] >= info.get("read_cursor", 0):
                 peer.publish(worker, info, "idle", native_session_id=cached["native_session_id"],
-                             read_cursor=batch["input_after"], pending_request=None, detail=None)
+                             read_cursor=batch["input_after"], pending_request=None, detail=None,
+                             history_epoch=max(info.get("history_epoch", 0), cached.get("epoch", 0)))
             return {"event": chat.event(existing), "duplicate": True}
         if owner and owner["agent"] != role["id"]:
             chat.fail("native session belongs to another role; fix the CLI configuration and use a fresh room")
@@ -331,12 +332,15 @@ def call_role(args, role, settings, batch, digest):
             peer.publish(worker, info, "calling", pending_request=event_request, detail=None)
             run_dir = root / (digest + "-" + role["id"])
             run_dir.mkdir()
+            # Replay history once after each extension to cover interrupted
+            # rounds; later calls resume the same session with only new events.
+            replay_history = batch.get("epoch", 0) > info.get("history_epoch", 0)
             context = {"your_identity": role["id"], "your_role": {k: role[k] for k in ("id", "title", "focus", "backend")},
                        "main_identity": settings["main"]["id"], "roles": public_roles(settings),
                        "project_directory": settings["cwd"], "topic": settings["briefing"]["question"],
                        "briefing": settings["briefing"], "round_index": batch["round_index"],
                        "max_rounds": settings["rounds"], "allowed_actions": batch["allowed"],
-                       "status": batch["status"], "new_events": [e for e in batch["events"] if batch.get("epoch", 0) > 0 or e["id"] > info.get("read_cursor", 0)]}
+                       "status": batch["status"], "new_events": [e for e in batch["events"] if replay_history or e["id"] > info.get("read_cursor", 0)]}
             namespace = argparse.Namespace(room=args.room, agent=role["id"], backend=role["backend"],
                                           cli=role["cli"], model=role.get("model"), cwd=settings["cwd"],
                                           turn_timeout=args.turn_timeout)
@@ -356,7 +360,8 @@ def call_role(args, role, settings, batch, digest):
             cached["phase"] = "committed"
             peer.write_json(cache_path, cached)
             peer.publish(worker, info, "idle", native_session_id=cached["native_session_id"],
-                         read_cursor=batch["input_after"], pending_request=None, detail=None)
+                         read_cursor=batch["input_after"], pending_request=None, detail=None,
+                         history_epoch=max(info.get("history_epoch", 0), cached.get("epoch", 0)))
             return {"event": applied["event"], "duplicate": applied["duplicate"]}
         except BaseException as exc:
             peer.publish(worker, info, "failed", pending_request=None, detail=str(exc))

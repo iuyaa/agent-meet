@@ -295,6 +295,13 @@ discussion, then 2 minutes for review. A single CLI call defaults to 180 seconds
 `--turn-timeout` can be 1–600. Timeouts, authentication/permission errors and invalid
 responses return an error to you without inventing a reply or agreement.
 
+For context compaction or session-resumption failures, read
+[session failure diagnosis](references/session-failures.md) before proposing a
+replacement. Inspect the actual CLI error and version first. This version has
+no supported in-place native-session handoff command; user approval alone does
+not make a replacement resumable. Preserve the room and evidence, and explain
+the recovery limitation rather than promising a new session can continue it.
+
 Inspect consultation state and named local logs with:
 
 ```bash

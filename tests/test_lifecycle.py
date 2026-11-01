@@ -126,6 +126,42 @@ class ContinuationTests(unittest.TestCase):
         self.assess("conclude", request="ready-after-continuation")
         self.proposal()
 
+    def test_extended_group_sends_full_history_once_then_only_unseen_events(self):
+        self.g.initialize(rounds=1)
+        self.g.run_round()
+        original = {r["id"]: peer.read_status(peer.paths(self.g.room, r["id"]))["native_session_id"] for r in self.g.roles}
+        self.extend("more", "--rounds", "2")
+        self.g.send(request="followup-2")
+        self.g.run_round("continued-first")
+        cursors = {r["id"]: peer.read_status(peer.paths(self.g.room, r["id"]))["read_cursor"] for r in self.g.roles}
+        self.g.send(request="followup-3")
+        self.g.run_round("continued-second")
+        for role in self.g.roles:
+            name = role["id"]
+            calls = self.g.calls(name)
+            first = calls[1]["context"]["new_events"]
+            second = calls[2]["context"]["new_events"]
+            self.assertIn(1, {e["id"] for e in first})
+            self.assertTrue(second)
+            self.assertTrue(all(e["id"] > cursors[name] for e in second))
+            self.assertEqual({e["sender"] for e in second if e["kind"] == "message"}, {"codex", "role0", "role1"})
+            for call in calls[1:]:
+                self.assertEqual(call["argv"][call["argv"].index("--resume") + 1], original[name])
+        with chat.database(self.g.room) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM events WHERE kind='message'").fetchone()[0], 9)
+        self.extend("more-again", "--rounds", "1")
+        self.g.send(request="followup-4")
+        self.g.run_round("continued-new-epoch")
+        # Lost output from an old successful request cannot roll the history
+        # epoch back and trigger another full replay in the current session.
+        self.g.run_round("continued-first")
+        for role in self.g.roles:
+            name = role["id"]
+            last = self.g.calls(name)[-1]
+            self.assertIn(1, {e["id"] for e in last["context"]["new_events"]})
+            self.assertEqual(last["argv"][last["argv"].index("--resume") + 1], original[name])
+            self.assertEqual(peer.read_status(peer.paths(self.g.room, name))["history_epoch"], 2)
+
     def test_confirmed_history_is_preserved_but_not_presented_as_current_conclusion(self):
         self.g.initialize(rounds=1)
         self.g.run_round()
