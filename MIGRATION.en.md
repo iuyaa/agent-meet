@@ -41,3 +41,11 @@ When the new version reads an existing foreground room, an accepted draft withou
 This adds the step for addressing final review feedback; it does not recreate the room, delete drafts, or call models automatically.
 Have the original host read the complete reviews and save the final result following `references/finalization.md`.
 The original manual/background protocol retains its previous confirmation behavior when lifecycle metadata is absent.
+
+## v0.11 task mode
+
+`task.py` adds version 3 task rooms. Existing version 1/2 discussion rooms are not
+converted or recreated. Discussion keeps its existing workflow; Claude coding,
+test and review assignments use the separate task workflow. Preserve task `.task/`
+data and Git-managed `.worktree/` files when updating the skill. Do not move or
+remove a live Git worktree as an ordinary temporary directory.

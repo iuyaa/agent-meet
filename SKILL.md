@@ -1,16 +1,25 @@
 ---
 name: agent-meet
-description: Discuss across Codex, Claude, pi and OpenCode, with any of them hosting from its current conversation. Configure roles and rounds, assess readiness before any draft, extend the same room on the user's decision and resume original native sessions. Show Markdown messages, folding, assessments and reviewed conclusions in a local page. Requires Python 3 and configured local role CLIs.
+description: Delegate implementation, tests and code review to Claude in an isolated Git worktree with original-host acceptance and same-session rework. Discuss across Codex, Claude, pi and OpenCode, with any of them hosting from its current conversation. Configure roles and rounds, assess readiness before any draft, extend the same room on the user's decision and resume original native sessions. Show Markdown messages, folding, assessments and reviewed conclusions in a local page. Requires Python 3 and configured local role CLIs.
 ---
 
-# Meet
+# Agent-Meet
 
 This skill is named `agent-meet` (formerly `agent-chat`). Keep existing discussion
 rooms and native session state when upgrading; see [migration](MIGRATION.en.md).
 
 User documentation: [简体中文](README.md) · [English](README.en.md).
 
-**Default: YOU remain the main participant in this existing conversation.**
+**For coding, fixing, testing or code-review assignments to Claude**, read
+[task workflow](references/task-workflow.md) FIRST and use `scripts/task.py`.
+Keep this original conversation as host; one Claude worker edits an isolated Git
+worktree. Inspect actual Git changes, run meaningful host checks, review or send
+rework to the SAME native session, then apply accepted changes when authorized.
+Task budgets default to 60 minutes and 5 attempts, not discussion rounds. Only
+Claude is currently an editable task backend. Do not route implementation through
+the read-only discussion protocol below. Discussion-only requests still use it.
+
+**Discussion default: YOU remain the main participant in this existing conversation.**
 Use `scripts/consult.py` to call one selected agent for ONE reply per foreground tool execution.
 The host may be Codex, Claude Code, pi, OpenCode or another agent able to read this
 skill and run its Python tools. Being host does not require a new host CLI process.

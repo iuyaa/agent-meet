@@ -11,6 +11,7 @@ The repository root is also the skill root.
 
 | File | Responsibility |
 | --- | --- |
+| `scripts/task.py`, `scripts/taskgit.py` | Claude task state, actual checks, host acceptance, same-session rework, Git snapshots and application |
 | `scripts/chat.py` | Event protocol, drafts, reviews, exports, and CLI entry point |
 | `scripts/consult.py` | Individual two-agent calls that preserve the original host |
 | `scripts/group.py` | Multi-role rounds, parallel calls, and review by all roles |
@@ -43,6 +44,7 @@ Optional browser checks require Playwright and Chromium in the development envir
 ```bash
 CHROMIUM=/path/to/chromium node tests/browser_view.cjs
 CHROMIUM=/path/to/chromium node tests/browser_group.cjs
+CHROMIUM=/path/to/chromium node tests/browser_task.cjs
 ```
 
 See the [validation record](../VALIDATION.en.md) for coverage, results, and real-environment limitations.

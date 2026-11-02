@@ -45,6 +45,18 @@ def snapshot(room):
     with chat.database(room) as conn:
         status = chat.state(conn)
         events = [chat.event(row) for row in conn.execute("SELECT * FROM events ORDER BY id")]
+        if status.get("mode") == "task":
+            import task
+            # Local log filenames, CLI configuration and native IDs stay private.
+            def public(value):
+                if isinstance(value, dict):
+                    return {k: public(v) for k, v in value.items() if k not in
+                            ("stdout_file", "stderr_file", "logs", "log_directory", "diff_file")}
+                if isinstance(value, list):
+                    return [public(v) for v in value]
+                return value
+            return public({"status": status, "events": events, "main": status["main"],
+                           "reviewer": "claude-worker", "model": {}, "worker": {}, "briefing": None})
         if status.get("mode") == "group":
             settings = group.config(conn)
             workers = {}

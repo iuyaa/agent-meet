@@ -162,39 +162,33 @@ def check_stop(args, directory):
         raise Interrupted("discussion closed: " + str(status["close_reason"]))
 
 
-def model_response(args, directory, run_directory, info, prompt, turn):
+def model_response(args, directory, run_directory, info, prompt, turn, response_schema=None):
+    schema = response_schema or RESPONSE_SCHEMA
     backend = args.backend
     prefix = cli_prefix(args.cli, backend)
     answer_path = run_directory / f"turn-{turn:03d}.answer.json"
     adapter = adapters.get(backend)
-    command, environment = adapter.command(args, directory, run_directory, info, prefix, answer_path, RESPONSE_SCHEMA)
+    command, environment = adapter.command(args, directory, run_directory, info, prefix, answer_path, schema)
     if adapter.prompt_schema:
-        prompt = "Return ONLY one JSON object matching this schema (no commentary outside JSON):\n" + json.dumps(RESPONSE_SCHEMA) + "\n" + prompt
+        prompt = "Return ONLY one JSON object matching this schema (no commentary outside JSON):\n" + json.dumps(schema) + "\n" + prompt
     input_path = run_directory / f"turn-{turn:03d}.prompt.txt"
     input_path.write_text(prompt, encoding="utf-8")
     output_path = run_directory / f"turn-{turn:03d}.result.json"
     error_path = run_directory / f"turn-{turn:03d}.stderr.txt"
     # Prompt text goes through stdin, never through a shell or command argument.
     with input_path.open("rb") as source, output_path.open("wb") as output, error_path.open("wb") as error:
-        process = subprocess.Popen(command, cwd=args.cwd, stdin=source, stdout=output, stderr=error,
-                                   env=environment, **processes.launch_options())
-        publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
-        until = time.monotonic() + args.turn_timeout
-        try:
-            while process.poll() is None:
-                check_stop(args, directory)
-                if time.monotonic() >= until:
-                    chat.fail(f"{backend.title()} turn timed out; inspect the runner log and retry explicitly")
-                time.sleep(0.2)
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-            publish(directory, info, "running", child_pid=None)
+        launch = processes.owned if getattr(args, "task_mode", False) else legacy_process
+        with launch(command, cwd=args.cwd, stdin=source, stdout=output, stderr=error, env=environment) as process:
+            publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
+            until = time.monotonic() + args.turn_timeout
+            try:
+                while process.poll() is None:
+                    check_stop(args, directory)
+                    if time.monotonic() >= until:
+                        chat.fail(f"{backend.title()} turn timed out; inspect the runner log and retry explicitly")
+                    time.sleep(0.2)
+            finally:
+                publish(directory, info, "running", child_pid=None)
     if process.returncode:
         chat.fail(f"{backend.title()} CLI exited with code {process.returncode}; see {error_path} and {output_path}")
     result, session = adapter.parse(output_path, answer_path, directory, info)
@@ -206,6 +200,21 @@ def model_response(args, directory, run_directory, info, prompt, turn):
         chat.fail(f"{backend} returned an invalid structured response")
     info["native_session_id"] = session
     return result
+
+
+@contextlib.contextmanager
+def legacy_process(command, **kwargs):
+    process = subprocess.Popen(command, **kwargs, **processes.launch_options())
+    try:
+        yield process
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
 
 
 def apply_response(args, directory, result, allowed, run_id, turn, status):

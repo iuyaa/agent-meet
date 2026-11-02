@@ -11,6 +11,7 @@ Meet 使用 Python 标准库、SQLite 和本地静态页面。无需 Golutra 应
 
 | 文件 | 职责 |
 | --- | --- |
+| `scripts/task.py`, `scripts/taskgit.py` | Claude 任务状态、检查与验收、同会话返工、Git 工作副本和安全应用 |
 | `scripts/chat.py` | 事件协议、草稿、审核、导出和 CLI 入口 |
 | `scripts/consult.py` | 保留原主持人的逐次双人调用 |
 | `scripts/group.py` | 多角色轮次、并行调用、全体审核 |
@@ -42,6 +43,7 @@ python3 -m unittest discover -s tests -v
 ```bash
 CHROMIUM=/path/to/chromium node tests/browser_view.cjs
 CHROMIUM=/path/to/chromium node tests/browser_group.cjs
+CHROMIUM=/path/to/chromium node tests/browser_task.cjs
 ```
 
 详细范围、结果和实机限制见 [验证记录](../VALIDATION.md)。

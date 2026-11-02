@@ -23,14 +23,16 @@ class Legacy:
     def command(self, args, directory, run_directory, info, prefix, answer_path, RESPONSE_SCHEMA):
         backend = self.backend
         if backend == "claude":
+            task = getattr(args, "task_mode", False)
+            tools = "Read,Glob,Grep,Edit,Write,Bash" if task else "Read,Glob,Grep"
             command = prefix + ["-p", "--output-format", "json", "--json-schema", json.dumps(RESPONSE_SCHEMA),
-                                "--tools", "Read,Glob,Grep", "--allowedTools", "Read,Glob,Grep",
+                                "--tools", tools, "--allowedTools", tools,
                                 "--permission-mode", "dontAsk", "--strict-mcp-config", "--mcp-config",
-                                '{"mcpServers":{}}', "--max-turns", "12"]
+                                '{"mcpServers":{}}', "--max-turns", "80" if task else "12"]
             if getattr(args, "model", None):
                 command += ["--model", args.model]
             if info.get("native_session_id"):
-                command += ["--resume", info["native_session_id"]]
+                command += ["--session-id" if task and getattr(args, "task_initial_session", False) else "--resume", info["native_session_id"]]
         elif backend == "codex":
             schema_path = run_directory / "response-schema.json"
             write_json(schema_path, RESPONSE_SCHEMA)

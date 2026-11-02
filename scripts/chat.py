@@ -68,7 +68,7 @@ def database(path, write=False):
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
         row = conn.execute("SELECT * FROM room WHERE singleton = 1").fetchone()
-        if not row or row["version"] not in (VERSION, 2):
+        if not row or row["version"] not in (VERSION, 2, 3):
             fail("unsupported discussion format")
         yield conn
         conn.commit()
@@ -82,7 +82,7 @@ def database(path, write=False):
 def event(row):
     result = dict(row)
     result["created"] = utc(result["created"])
-    if result["kind"] in ("proposal", "review", "assessment", "extension", "finalization"):
+    if result["kind"].startswith("task_") or result["kind"] in ("proposal", "review", "assessment", "extension", "finalization"):
         result["body"] = json.loads(result["body"])
     return result
 
@@ -90,6 +90,9 @@ def event(row):
 def state(conn):
     import lifecycle
     room = dict(conn.execute("SELECT * FROM room").fetchone())
+    if room["version"] == 3:
+        import task
+        return task.state(conn, room)
     if room["version"] == 2:
         import group
         return group.state(conn, room)
@@ -129,13 +132,21 @@ def state(conn):
 
 
 def identity(conn, name):
+    require_discussion(conn)
     if name not in json.loads(conn.execute("SELECT participants FROM room").fetchone()[0]):
         fail("identity is not a discussion participant")
     if not conn.execute("SELECT 1 FROM members WHERE name = ?", (name,)).fetchone():
         fail("join with this identity first")
 
 
+def require_discussion(conn):
+    if conn.execute("SELECT version FROM room").fetchone()[0] == 3:
+        fail("task rooms require task.py commands; discussion mutations are disabled")
+
+
 def next_action(status, name):
+    if status.get("mode") == "task":
+        return "use_task_commands"
     if status.get("continuation_needs_approval"):
         return "await_extension" if name == status.get("main", status["participants"][0]) else "wait"
     if status.get("finalization_status") == "pending" and status["phase"] == "finalizing":
@@ -189,6 +200,7 @@ def create(args):
 
 def join(args):
     with database(args.room, write=True) as conn:
+        require_discussion(conn)
         status = state(conn)
         if args.agent not in status["participants"]:
             fail("identity is not a discussion participant")
@@ -238,6 +250,7 @@ def append(args):
     kind = {"send": "message", "propose": "proposal", "review": "review"}[args.command]
     request_id = nonempty(args.request_id, "request-id")
     with database(args.room, write=True) as conn:
+        require_discussion(conn)
         if conn.execute("SELECT version FROM room").fetchone()[0] == 2:
             import group
             return group.append(conn, args)
@@ -338,6 +351,9 @@ def export(args):
     with database(args.room) as conn:
         status = state(conn)
         events = [event(row) for row in conn.execute("SELECT * FROM events ORDER BY id")]
+    if status.get("mode") == "task":
+        import task
+        return task.export_record(args, status, events)
     is_group = status.get("mode") == "group"
     lines = ["# " + ("多角色" if is_group else "双 Agent") + "讨论记录", "", "## 讨论问题", "", status["topic"], "",
              "参与者：" + ", ".join(status["participants"]),

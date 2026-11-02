@@ -14,6 +14,21 @@ $agent-meet Ask Claude to review this proposal, focusing on boundaries and failu
 
 Follow the messages, drafts, reviews, and final conclusion in a local group chat page.
 
+You can also delegate implementation, tests and code review to one Claude Code
+worker in an isolated Git worktree. The current host inspects the actual diff,
+runs checks, sends rework to the same native session, accepts, and applies the
+result. Current uncommitted source edits become the task's starting snapshot.
+Any capable agent may host; editable task workers currently support Claude only.
+Tasks default to 60 minutes and 5 attempts, separate from discussion rounds.
+Git 2.31+ and an existing commit are required; dependencies are not copied.
+See [task usage](docs/USAGE.en.md#implementation-test-and-code-review-tasks).
+
+```text
+Use agent-meet to have Claude fix this issue and add a regression test.
+Keep hosting here, review the actual diff and test results, send rework to the
+same Claude session when needed, then apply the accepted changes.
+```
+
 ## Get started
 
 You need Python 3.9+ and an installed, configured local CLI for each invited agent.

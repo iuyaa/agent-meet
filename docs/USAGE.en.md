@@ -221,3 +221,46 @@ Keep discussion data out of version control. The tools do not rewrite project co
 Adapters restrict project write access; Python tools handle communication writes.
 pi disables extensions and skills. OpenCode uses a dedicated discussion agent with read-only tool permissions; version 2.x uses a separate service for each call to avoid reusing stale configuration.
 Model calls use existing CLI model settings and accounts. The tools do not provide model access.
+
+## Implementation, test and code-review tasks
+
+```text
+Use agent-meet to have Claude fix the issue we reproduced and add regression coverage.
+You review the actual diff and tests, send corrections back to the same Claude
+session, and apply the accepted changes to the project.
+```
+
+You may instead request a read-only review with no edits. The original host derives
+the task, context, constraints and acceptance criteria from its current conversation.
+One Claude worker uses an isolated Git worktree initialized with the source's
+staged, unstaged and nonignored untracked files. Source HEAD and index stay intact.
+
+The page distinguishes the worker's test claims from real host check receipts,
+and accepted results from changes actually applied to the source. The host must
+inspect the Git diff and relevant files, run meaningful checks and review against
+the task criteria. Rework resumes the same native Claude session and worktree.
+Failures retain partial changes and native identity; they do not trigger a silent
+session replacement.
+
+Acceptance creates a delivery commit on the isolated task branch. Applying updates
+the source working files without staging, committing or pushing the source branch.
+Changed destination paths cause a refusal instead of overwriting new user edits;
+unrelated edits survive. Worktrees provide separate working files, **not an OS
+security sandbox**. Claude still runs under the local user's account.
+
+Defaults: 60 minutes total, 5 worker attempts including failed calls, 900 seconds
+per worker call, and 300 seconds per host check. Task budgets are separate from
+discussion rounds. Explain the need for more work and let the user decide any
+extension. This release supports one Claude task worker; other agents can host.
+
+Git 2.31+, an existing commit and the repository root as project directory are
+required. Submodules and unresolved merge conflicts are currently rejected.
+Ignored files and dependencies are not copied, so builds may require installation.
+Task data stays under `.agent-meet/TASK/`, with `.task/` logs, `.worktree/` files
+and `.view/` beside the database. Preserve CLI-native session storage as well.
+
+Failures print their log directory: inspect `turn-001.stderr.txt`,
+`turn-001.result.json` and actual changes before an explicit retry. Reusing a
+failed request ID does not replay edits. Native compaction failures still need
+CLI/gateway diagnosis; the task workflow does not replace the session to bypass them.
+See [task workflow](../references/task-workflow.md) for the complete tool protocol.

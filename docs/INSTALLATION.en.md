@@ -7,6 +7,8 @@
 Only the agent initiating the discussion needs this skill. Invited participants need their own configured CLIs, without a separate skill installation.
 Discussions require Python 3.9+. Command installation uses the third-party [Skills CLI](https://github.com/vercel-labs/skills), whose current version requires Node.js 22.20+.
 
+Implementation/test/review tasks additionally need Git 2.31+, an existing commit, and a configured Claude Code CLI. Other invited backends remain discussion-only.
+
 ## Install with a command
 
 Run this from the project where you want to use the skill:

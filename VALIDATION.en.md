@@ -4,7 +4,35 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
-`python3 -m unittest discover -s tests -v` passed **119 tests**: 14 for the original communication protocol, 9 for foreground calls preserving the host conversation, 9 for a single invited participant, 7 for bilateral orchestration and Codex wrappers, 8 for the local viewer service, 15 for multi-role protocol and parallel calls, 15 for continuation and readiness assessment, 12 for cross-agent adapters, 12 for project-local storage, 15 for review finalization, and 3 for cross-platform process launches.
+`python3 -m unittest discover -s tests -v` discovered **141 tests**:
+**140 passed**, and one native Windows Job Object check was skipped on Linux.
+This includes the previous 119 regressions, 21 task tests and one Windows-only test.
+
+## v0.11.0: implementation tasks
+
+- Real temporary Git repositories verify that staged, unstaged and untracked files
+  become the isolated starting snapshot, without changing source HEAD or index.
+- A simulated Claude CLI edits real worktree files. The host runs real Python
+  checks, reviews exact Git snapshots and applies accepted changes. Failing checks,
+  stale snapshots and changed destination files are rejected.
+- Rework, explicit retries after failures and budget extensions retain the same
+  native ID. Completed request IDs do not repeat CLI calls. `is_error: true` remains
+  failure even when the envelope subtype says success.
+- Binary additions, deletions, executable modes and files containing both staged
+  and unstaged user edits survive delivery; unrelated source edits and the source
+  index remain intact.
+- Stop/timeout preserve partial work without holding a long database write lock.
+  Ordinary Linux process descendants are cleaned up after stop, timeout and normal exit.
+- Windows starts task processes suspended, assigns a kill-on-close Job Object,
+  then resumes them, retaining CREATE_NO_WINDOW. A native test is included but
+  Windows/macOS behavior has not been verified in this environment.
+- All three Chromium browser suites pass: bilateral discussion, group discussion
+  and tasks. Coverage includes Markdown, persistent folding, checks, acceptance vs
+  application, exports, private-field filtering and 390px layouts.
+- Claude Code 2.1.312 help confirms the CLI flags. Model responses still use fixture
+  CLIs: real model execution and gateway compaction recovery were not verified.
+- Worktrees are not an OS sandbox. Task mode requires Git 2.31+ and an existing
+  commit, repository-root paths, no submodules, and one Claude worker at a time.
 
 ## v0.10.2: incremental context after continuation
 

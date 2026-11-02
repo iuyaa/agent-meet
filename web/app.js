@@ -225,18 +225,23 @@ function message(event, data) {
   );
   const content = node('div');
   const meta = node('div', undefined, 'message-meta');
-  const name = role ? role.title : engineName(event.sender);
+  const isTask = data.status.mode === 'task';
+  const name = isTask && reviewer ? 'Claude' : role ? role.title : engineName(event.sender);
   meta.append(
     node('span', name, 'sender'),
     node(
       'span',
-      role
-        ? role.backend === 'existing'
-          ? '当前会话'
-          : engineName(role.backend)
-        : reviewer
-          ? '讨论伙伴'
-          : '主参与者',
+      isTask
+        ? reviewer
+          ? '任务执行者'
+          : '原会话主持'
+        : role
+          ? role.backend === 'existing'
+            ? '当前会话'
+            : engineName(role.backend)
+          : reviewer
+            ? '讨论伙伴'
+            : '主参与者',
       'role',
     ),
   );
@@ -258,7 +263,9 @@ function message(event, data) {
   const bubble = node('div', undefined, 'bubble');
   const body = node('div', undefined, 'message-body');
   body.id = 'body-' + event.id;
-  if (event.kind === 'finalization') {
+  if (event.kind.startsWith('task_')) {
+    body.append(taskEvent(event));
+  } else if (event.kind === 'finalization') {
     const historical = data.status.latest_finalization?.id !== event.id;
     body.append(
       node('div', historical ? '历史最终结论' : '最终结论 · 已处理最后审核意见', 'proposal-label'),
@@ -376,7 +383,139 @@ function message(event, data) {
   );
   return el;
 }
+function taskEvent(event) {
+  const b = event.body;
+  const el = node('div', undefined, 'structured');
+  const labels = {
+    created: '任务要求',
+    started: '开始执行',
+    result: 'Claude 提交结果',
+    check: '主持人检查',
+    review: '主持人验收',
+    applied: '已应用到原项目',
+    failed: '调用未完成',
+    extended: '追加任务预算',
+  };
+  el.append(node('div', labels[event.kind.slice(5)] || event.kind, 'proposal-label'));
+  if (event.kind === 'task_created') {
+    el.append(markdown(b.spec.instructions), markdown(b.spec.context));
+    list(el, '约束', b.spec.constraints);
+    list(el, '验收标准', b.spec.acceptance_criteria);
+  } else if (event.kind === 'task_result') {
+    el.append(markdown(b.worker_report.summary));
+    list(el, 'Claude 报告的检查（尚非主持人验证）', b.worker_report.tests);
+    list(el, '剩余问题', b.worker_report.remaining_issues);
+    list(el, 'Git 记录的改动文件', b.git.changed_files);
+    el.append(markdown('```text\n' + b.git.stat + '\n```'));
+  } else if (event.kind === 'task_check') {
+    el.append(
+      node('strong', b.passed ? '检查通过' : '检查未通过'),
+      node('p', '退出码：' + b.exit_code),
+      node('code', JSON.stringify(b.argv)),
+    );
+    if (b.error) el.append(markdown(b.error));
+    const log = node('details');
+    log.append(node('summary', '查看检查输出'), node('pre', b.stdout + '\n' + b.stderr));
+    if (b.stdout_truncated || b.stderr_truncated)
+      log.append(node('p', '输出已截断，完整日志由原主持人在本地查看。', 'muted'));
+    el.append(log);
+    if (b.snapshot !== b.after_snapshot)
+      el.append(node('p', '检查修改了文件，需重新检查当前快照。'));
+  } else if (event.kind === 'task_review') {
+    el.append(
+      node(
+        'strong',
+        b.decision === 'accept' ? '验收通过 · 等待应用' : '要求返工 · 恢复原 Claude 会话',
+      ),
+      markdown(b.comment),
+    );
+    if (b.no_check_reason) el.append(markdown('未运行检查的理由：' + b.no_check_reason));
+  } else if (event.kind === 'task_started') {
+    el.append(node('p', '第 ' + b.attempt + ' 次执行'));
+    if (b.feedback) el.append(markdown(b.feedback.comment));
+  } else if (event.kind === 'task_failed') {
+    el.append(markdown(b.summary), markdown(b.reason));
+  } else if (event.kind === 'task_extended') {
+    el.append(
+      node('p', '追加 ' + b.attempts + ' 次执行，' + b.minutes + ' 分钟'),
+      markdown(b.reason),
+    );
+  } else if (event.kind === 'task_applied') {
+    el.append(markdown(b.note));
+    list(el, '已应用文件', b.changed_files);
+  }
+  return el;
+}
+
+function renderTask(data) {
+  const s = data.status;
+  stopped = s.phase === 'closed';
+  const labels = {
+    ready: '待执行',
+    running: 'Claude 执行中',
+    ready_for_review: '等待主持人验收',
+    blocked: '需要主持人处理',
+    failed: '执行未完成',
+    changes_requested: '待原会话返工',
+    accepted: '验收通过',
+  };
+  const label = s.applied
+    ? '已应用到原项目'
+    : s.close_reason === 'expired'
+      ? '时间已到'
+      : s.close_reason?.startsWith('stopped:')
+        ? '已停止'
+        : labels[s.task_state] || s.task_state;
+  $('topic').textContent = s.topic;
+  document.title = s.topic + ' · Agent-Meet 任务';
+  document.querySelector('.local').textContent = '本地任务';
+  document.querySelector('.eyebrow').firstChild.textContent = 'TASK ROOM ';
+  $('participants').textContent = s.main + ' 主持 / Claude 执行';
+  $('participant-count').textContent = '／ TASK WORKTREE';
+  $('count').textContent = s.attempts + ' / ' + s.max_attempts + ' 次执行';
+  $('round-progress').textContent = '时间上限：' + new Date(s.expires_at).toLocaleString();
+  $('phase').textContent = label;
+  $('phase').classList.toggle('closed', stopped);
+  $('activity').textContent =
+    label + (s.task_state === 'accepted' && !s.applied ? ' · 改动仍在隔离工作副本' : '');
+  $('activity').classList.toggle('busy', !stopped && s.task_state === 'running');
+  $('notice').hidden = true;
+  $('stop').textContent = '停止任务';
+  $('stop').disabled = stopped;
+  $('export').disabled = false;
+  document.querySelector('#stop-dialog h2').textContent = '停止这次任务？';
+  document.querySelector('#stop-dialog p').textContent =
+    '取消正在执行的调用或检查；保留工作副本、原生会话和已有记录。';
+  document.querySelector('#stop-dialog button[value="cancel"]').textContent = '继续任务';
+  document.querySelector('#stop-dialog button[value="stop"]').textContent = '停止任务';
+  document.querySelector('.compose-hint div').textContent =
+    '在发起任务的原会话中审查、要求返工和应用结果。';
+  document.querySelector('.sidebar-note').textContent =
+    'Claude 的完成说明与主持人实际检查分别记录。验收通过后仍需应用到原项目。';
+  document.querySelector('#assessment-panel h2').textContent = '验收标准';
+  document.querySelector('.conclusion-panel h2').textContent = '任务结果';
+  const signature = JSON.stringify([s, data.events]);
+  if (signature === lastEvents) return;
+  const nearBottom =
+    window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 180;
+  const initial = !lastEvents;
+  $('messages').replaceChildren(...data.events.map((event) => message(event, data)));
+  $('briefing').replaceChildren(markdown(s.spec.instructions), markdown(s.spec.context));
+  list($('briefing'), '约束', s.spec.constraints);
+  $('assessment').replaceChildren();
+  list($('assessment'), '主持人按这些要求检查实际改动', s.spec.acceptance_criteria);
+  const out = $('outcome');
+  out.replaceChildren(node('strong', label));
+  if (s.last_result) out.append(markdown(s.last_result.summary));
+  list(out, 'Git 记录的改动文件', s.changed_files);
+  out.append(node('p', '已记录 ' + s.checks.length + ' 次主持人检查'));
+  if (s.snapshot) out.append(node('p', '快照：' + s.snapshot.slice(0, 12), 'muted'));
+  lastEvents = signature;
+  if (!initial && nearBottom) $('activity').scrollIntoView({ block: 'nearest' });
+}
+
 function render(data) {
+  if (data.status.mode === 'task') return renderTask(data);
   const s = data.status,
     model = data.model,
     worker = data.worker;

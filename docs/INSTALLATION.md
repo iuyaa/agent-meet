@@ -8,6 +8,8 @@
 不需要再安装一份 skill。讨论运行需要 Python 3.9+；命令安装使用第三方
 [Skills CLI](https://github.com/vercel-labs/skills)，其当前版本需要 Node.js 22.20+。
 
+实现、测试、Review 任务还需要 Git 2.31+、至少一个 Git 提交，以及配置好的 Claude Code CLI；其它受邀后端目前用于讨论。
+
 ## 命令安装
 
 在需要使用的项目目录执行：
