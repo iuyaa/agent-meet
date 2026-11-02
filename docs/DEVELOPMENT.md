@@ -12,6 +12,8 @@ Meet 使用 Python 标准库、SQLite 和本地静态页面。无需 Golutra 应
 | 文件 | 职责 |
 | --- | --- |
 | `scripts/task.py`, `scripts/taskgit.py` | Claude 任务状态、检查与验收、同会话返工、Git 工作副本和安全应用 |
+| `scripts/update.py`, `scripts/runtime.py` | 发布版本检查、原位更新、备份和安装运行锁 |
+| `scripts/release.py`, `INSTALL-MANIFEST.json` | 发布文件清单与可校验安装包构建 |
 | `scripts/chat.py` | 事件协议、草稿、审核、导出和 CLI 入口 |
 | `scripts/consult.py` | 保留原主持人的逐次双人调用 |
 | `scripts/group.py` | 多角色轮次、并行调用、全体审核 |
@@ -56,3 +58,21 @@ CHROMIUM=/path/to/chromium node tests/browser_task.cjs
 
 本包为独立实现，未复制 Golutra 应用源码或资产。历史来源见
 [迁移说明](../MIGRATION.md)，原始后台模式见[可选模式](../references/alternative-modes.md)。
+
+## 发布更新包
+
+修改版本和文档后先暂存源码，生成清单并提交；再从已提交的 Git 树构建 ZIP：
+
+```bash
+git add -A
+python3 scripts/release.py manifest
+git add INSTALL-MANIFEST.json
+git commit -m "feat: describe the change"
+python3 scripts/release.py package
+```
+
+构建器排除 `releases/`，并要求清单与提交内容一致；已有 ZIP 不会覆盖。
+将新的 ZIP 和 SHA-256 文件提交，为该发布提交打相同版本的标签，连同 main 原子推送。
+更新器只接受 main 的 VERSION 对应标签中已存在的校验文件，不会安装尚未发布的源码版本。
+每次改动受管理文件都需重新生成清单，否则自动更新会视为本地修改并延后。
+运行缓存、安装锁和备份放在技能目录之外；讨论/任务的原生会话和数据库不参加版本迁移。

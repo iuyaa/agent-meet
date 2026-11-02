@@ -4,9 +4,30 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
-`python3 -m unittest discover -s tests -v` discovered **141 tests**:
-**140 passed**, and one native Windows Job Object check was skipped on Linux.
-This includes the previous 119 regressions, 21 task tests and one Windows-only test.
+`python3 -m unittest discover -s tests -v` discovered **163 tests**:
+**162 passed**, and one native Windows Job Object check was skipped on Linux.
+This includes the previous 119 regressions plus two viewer-update checks, 21 task tests, 20 updater tests and one Windows-only test.
+
+## v0.12.0: skill updates
+
+- Twenty updater tests cover published-version checks, one-hour metadata caching,
+  forced checks, offline/unpublished versions, no downgrades, checksum/inventory
+  failures, unsafe paths and duplicate/symlink archive rejection.
+- Real directories verify in-place replacement, extra files and old room data,
+  symlink installation paths, complete backups, rollback after failed cutover and
+  protection against user edits during staging.
+- Real subprocesses verify concurrent shared leases, exclusive-update refusal of
+  new tools, lease release after exit, and chat.py's retryable error during updates.
+- Real temporary Git repositories and a local substitute remote verify fast-forward
+  updates with branch/metadata/history retained; dirty and development checkouts
+  are not reset.
+- Live public VERSION/tag-checksum checks confirm that a newer development install
+  is not downgraded. Host compliance with the new SKILL.md instruction has not been
+  tested with real models.
+- Linux was used. Native Windows file-sharing leases/directory replacement remain
+  unverified. Retained project-local viewers keep their pinned resources across
+  updates; the next start refreshes old services. Legacy in-skill room viewers
+  intentionally defer replacement.
 
 ## v0.11.0: implementation tasks
 

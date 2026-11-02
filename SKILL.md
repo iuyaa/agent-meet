@@ -1,6 +1,6 @@
 ---
 name: agent-meet
-description: Delegate implementation, tests and code review to Claude in an isolated Git worktree with original-host acceptance and same-session rework. Discuss across Codex, Claude, pi and OpenCode, with any of them hosting from its current conversation. Configure roles and rounds, assess readiness before any draft, extend the same room on the user's decision and resume original native sessions. Show Markdown messages, folding, assessments and reviewed conclusions in a local page. Requires Python 3 and configured local role CLIs.
+description: Check for published Agent-Meet updates before use and update this installation when idle and unmodified. Delegate implementation, tests and code review to Claude in an isolated Git worktree with original-host acceptance and same-session rework. Discuss across Codex, Claude, pi and OpenCode, with any of them hosting from its current conversation. Configure roles and rounds, assess readiness before any draft, extend the same room on the user's decision and resume original native sessions. Show Markdown messages, folding, assessments and reviewed conclusions in a local page. Requires Python 3 and configured local role CLIs.
 ---
 
 # Agent-Meet
@@ -9,6 +9,49 @@ This skill is named `agent-meet` (formerly `agent-chat`). Keep existing discussi
 rooms and native session state when upgrading; see [migration](MIGRATION.en.md).
 
 User documentation: [简体中文](README.md) · [English](README.en.md).
+
+## Before starting: check this installation for updates
+
+Unless the user explicitly opts out or pins a version, run this ONCE at the start
+of a user-requested operation, before initializing a room, extending one or
+calling an agent. Resolve the path from THIS SKILL.md; use the project directory
+as your command's working directory, outside the skill installation:
+
+```bash
+python3 /actual/path/to/agent-meet/scripts/update.py apply
+```
+
+This is the default update policy, not a separate confirmation step. It checks
+only the official Agent-Meet repository, caches published-version metadata for
+one hour, verifies the tagged package and updates this SAME installation. It does
+not update model CLIs, change authentication/models, or restart native sessions.
+If the user explicitly asks to check/update NOW, add `--force-check`.
+
+Read the JSON result:
+
+- `state=updated`: briefly report `previous_version` / `current_version`,
+  then RE-READ `reload_skill` before following
+  further instructions. The original host conversation continues here.
+- `current` or `ahead`: continue silently; never downgrade a newer local version.
+- `busy`: an Agent-Meet call or a legacy viewer with in-skill room data still uses this installation. Defer the
+  replacement and continue the existing workflow on its current version. Do not
+  stop agents/viewers just to force an update. Retry at a later idle invocation.
+- `deferred`: offline, unavailable published package, local edits, permissions or
+  validation prevented the update. Keep the installed version and continue if
+  `can_continue=true`; mention the reason briefly when relevant. Do not retry in a
+  loop, overwrite custom files, reset Git, create another install, or ask for a
+  permission override merely for this preflight. If the installation cannot be
+  read (`can_continue=false`), explain the error and preserved backup before work.
+- `changed`: another updater completed; re-read this installation's SKILL.md.
+
+Respect explicit user opt-outs, forks and pinned versions. Auto-update cannot
+make older skills aware of this rule: users on pre-v0.12 need one initial upgrade.
+Normal retained viewers pin their loaded code/assets and do not block updates.
+The next view.py start refreshes an older viewer without resetting its room.
+Files installs retain a full backup outside the skill discovery directory; Git
+installs require a clean `main` branch with the official origin and fast-forward
+only. All room data and CLI-native sessions remain intact. Details and manual
+commands: [updates](references/updates.md).
 
 **For coding, fixing, testing or code-review assignments to Claude**, read
 [task workflow](references/task-workflow.md) FIRST and use `scripts/task.py`.

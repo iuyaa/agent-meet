@@ -44,21 +44,50 @@ Check the installer output for the actual paths. Project discussion data still g
 `npx skills` installs this repository from GitHub; this project does not need a separate npm installer package.
 Node.js runs the installer; Python and the agent CLIs run the discussions.
 
-## Update
+## Automatic updates
 
-Skills CLI provides commands to check for updates and install them:
+Starting with v0.12, the skill asks the host to run a version preflight before
+starting a discussion, continuing one or assigning work. It checks only Agent-Meet,
+with successful metadata checks cached for one hour. A published newer version is
+installed in the same directory and the host re-reads SKILL.md before continuing.
+There is no background updater; the host must follow the skill instructions.
 
 ```bash
-npx skills check
-npx skills update agent-meet
+python3 /path/to/agent-meet/scripts/update.py check
+python3 /path/to/agent-meet/scripts/update.py apply --force-check
 ```
 
-Use `npx skills list` to inspect installed skills, or `npx skills list -g` for global skills.
-Command installation has been verified in temporary projects. The global and update commands above follow the Skills CLI interface; actual behavior depends on its version, the host's discovery rules, and access permissions.
+The first command only checks. The second bypasses the cache and installs when
+safe. On Windows, `py -3` may replace `python3`. Run from the project directory,
+outside the skill installation. No Node.js is needed for these update commands.
 
-After updating, keep the current conversation and have the host reread `SKILL.md` from the installation path.
-Close and restart any running viewer service; refreshing the browser does not reload the Python service code.
-Preserve the discussion database, all state directories sharing its filename prefix, and each CLI's native session data. Continue using the original `--room`.
+Offline checks do not block the current task. Active Agent-Meet calls
+hold a runtime lease, so replacement is deferred while they run. Local edits,
+pinned/development Git branches and unexpected file conflicts also defer rather
+than overwrite. No model CLI, model selection, credentials or native session is
+replaced. Explicit requests to keep the current version take precedence.
+
+After active calls finish, pre-v0.12 installations need one initial upgrade because their SKILL.md has no
+preflight instruction. Re-run the original installation command with the same
+host/global options, or use `git pull --ff-only` for an unmodified Git clone.
+Do not create a second install when updating a custom manual directory.
+
+Skills CLI also offers `npx skills check` and update management. Its behavior and
+lock metadata depend on the installer version; built-in updates do not rewrite
+that external installer's lock file. If its display is stale, use the original
+installer to refresh the same installation. `npx skills list` / `list -g` shows
+project/global installations.
+
+Files updates verify package SHA-256 and an embedded inventory, keep extra files
+and room data, preserve skill-directory symlinks and retain a full backup in the
+user cache. Git updates fast-forward the official release tag on clean `main`,
+preserving Git metadata and recording the previous commit. See [update details](../references/updates.md).
+
+Keep existing databases, same-prefix state directories and CLI-native sessions;
+continue with the original `--room`. Retained viewers pin loaded code/assets and do not block updates; the next
+view.py start refreshes an older service without resetting the room. Legacy
+viewers with room data inside the skill still block replacement to avoid copying
+a database that can be written during the update.
 
 ## Manual installation
 

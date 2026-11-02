@@ -23,8 +23,10 @@ import consult
 import group
 import peer
 import processes
+import task  # Preload all installed protocol modules before releasing the viewer lease.
 
 WEB = Path(__file__).resolve().parent.parent / "web"
+SKILL_VERSION = (WEB.parent / "VERSION").read_text(encoding="utf-8").strip()
 ASSETS = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css",
           "/vendor/marked-17.0.5.js": "vendor/marked-17.0.5.js",
           "/vendor/dompurify-3.4.17.js": "vendor/dompurify-3.4.17.js"}
@@ -84,6 +86,9 @@ class Viewer(HTTPServer):
         self.room = str(Path(room).resolve())
         self.token = secrets.token_urlsafe(32)
         self.closing = False
+        # A retained viewer serves one consistent version even after code updates.
+        self.assets = {url: ((mimetypes.guess_type(name)[0] or "application/octet-stream") + "; charset=utf-8",
+                             (WEB / name).read_bytes()) for url, name in ASSETS.items()}
         super().__init__(("127.0.0.1", 0), Handler)
         self.timeout = 0.5
         self.origin = "http://127.0.0.1:" + str(self.server_port)
@@ -138,9 +143,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.respond(200, output.read_bytes(), "text/markdown; charset=utf-8",
                                  **{"Content-Disposition": 'attachment; filename="agent-meet-report.md"'})
             elif self.path in ASSETS:
-                path = WEB / ASSETS[self.path]
-                mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-                self.respond(200, path.read_bytes(), mime + "; charset=utf-8")
+                mime, content = self.server.assets[self.path]
+                self.respond(200, content, mime)
             else:
                 self.respond(404, {"error": "not found"})
         except (chat.ChatError, OSError, ValueError, sqlite3.Error) as exc:
@@ -203,9 +207,14 @@ def serve(room, run_id):
     with peer.participant_lock(root):
         snapshot(room)
         with Viewer(room) as server:
+            # No installed code/assets are read after startup. Normal project-local
+            # viewers can remain open through an update; legacy in-skill room data
+            # keeps the lease because copying a live SQLite file would be unsafe.
+            if WEB.parent not in Path(room).resolve().parents and chat._installation_lease:
+                chat._installation_lease.close()
             info = {"state": "running", "pid": os.getpid(), "origin": server.origin,
                     "token": server.token, "url": server.origin + "/#" + server.token,
-                    "run_id": run_id}
+                    "run_id": run_id, "skill_version": SKILL_VERSION}
             peer.write_json(root / "status.json", info)
             if os.name != "nt":
                 (root / "status.json").chmod(0o600)
@@ -226,6 +235,14 @@ def start(args):
         root.chmod(0o700)
     with peer.participant_lock(root / "launcher"):
         info = running(args.room)
+        if info and info.get("skill_version") != SKILL_VERSION:
+            request(info, "/api/shutdown", "POST")
+            until = time.monotonic() + 4
+            while running(args.room) and time.monotonic() < until:
+                time.sleep(0.05)
+            if running(args.room):
+                chat.fail("older viewer did not close; retry after it exits")
+            info = None
         duplicate = bool(info)
         if not info:
             run_id = secrets.token_hex(12)

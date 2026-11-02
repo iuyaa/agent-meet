@@ -48,6 +48,11 @@ See [Installation](docs/INSTALLATION.en.md) for agent selection, updates, and ma
 Keep your current conversation and ask it to read the installed `SKILL.md`, then describe the discussion you want.
 Skill discovery depends on the host version. In Codex, use `$agent-meet`; other hosts can use the skill name or path directly.
 
+From v0.12, the host checks Agent-Meet before use (metadata cached for one hour)
+and updates the same installation when idle and unmodified. Offline or busy
+installations keep working on their current version. Older versions need one
+initial upgrade. See [automatic updates](docs/INSTALLATION.en.md#automatic-updates).
+
 ## Ways to use it
 
 **Ask another agent to review a proposal**

@@ -12,6 +12,14 @@ import sys
 import time
 from pathlib import Path
 
+import runtime
+
+try:
+    _installation_lease = runtime.reader(Path(__file__).resolve().parent.parent)
+except runtime.Busy:
+    print(json.dumps({"ok": False, "error": "Agent-Meet is updating; retry this command after the update"}), file=sys.stderr)
+    sys.exit(1)
+
 # The CLI also serves as a library for the group protocol. Share its exception
 # class when invoked as a script instead of importing a second copy of chat.
 if __name__ == "__main__":

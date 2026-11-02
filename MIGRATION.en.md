@@ -49,3 +49,14 @@ converted or recreated. Discussion keeps its existing workflow; Claude coding,
 test and review assignments use the separate task workflow. Preserve task `.task/`
 data and Git-managed `.worktree/` files when updating the skill. Do not move or
 remove a live Git worktree as an ordinary temporary directory.
+
+## v0.12 skill updates
+
+Preflight checks and `INSTALL-MANIFEST.json` are new. Older skills need one initial
+manual/original-installer upgrade because they lack the instruction. Databases
+and native sessions are not converted or recreated. Active tools block
+replacement until idle. Retained project-local viewers pin resources; the next
+start refreshes an old service without resetting its room. Local customizations and pinned versions defer updates;
+do not bypass this with overwrites, state cleanup or Git resets. File-install
+backups live in the user cache; Git installs keep commit history. External
+installer lock files are not rewritten.

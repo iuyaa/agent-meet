@@ -12,6 +12,8 @@ The repository root is also the skill root.
 | File | Responsibility |
 | --- | --- |
 | `scripts/task.py`, `scripts/taskgit.py` | Claude task state, actual checks, host acceptance, same-session rework, Git snapshots and application |
+| `scripts/update.py`, `scripts/runtime.py` | Published-version checks, in-place updates, backups and installation leases |
+| `scripts/release.py`, `INSTALL-MANIFEST.json` | Release inventory and verifiable ZIP generation |
 | `scripts/chat.py` | Event protocol, drafts, reviews, exports, and CLI entry point |
 | `scripts/consult.py` | Individual two-agent calls that preserve the original host |
 | `scripts/group.py` | Multi-role rounds, parallel calls, and review by all roles |
@@ -57,3 +59,24 @@ Cover native session resumption, errors and truncated output, repeated requests,
 
 This package is independently implemented and contains no copied Golutra application source or assets.
 See [Migration](../MIGRATION.en.md) for its history and [alternative modes](../references/alternative-modes.md) for the original background workflows.
+
+## Release packages
+
+After editing the version and documentation, stage sources, generate the inventory
+and commit; build the ZIP from that committed Git tree:
+
+```bash
+git add -A
+python3 scripts/release.py manifest
+git add INSTALL-MANIFEST.json
+git commit -m "feat: describe the change"
+python3 scripts/release.py package
+```
+
+The builder excludes `releases/`, requires a matching committed inventory, and
+refuses to overwrite an existing ZIP. Commit the new ZIP/checksum, tag that release
+commit with the same version, then push main/tag atomically. The updater requires
+a checksum at that tag for main's VERSION; unpublished source versions are not
+installed. Regenerate the inventory whenever a managed file changes. Runtime
+leases, cache and backups stay outside the skill; room/native-session data is not
+migrated by updating the code.

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.0 — Skill update preflight
+
+- Guide the current host to check published Agent-Meet versions before each operation, with a one-hour cache and explicit forced checks. Update the same installation when idle and unmodified, then re-read SKILL.md.
+- Add verified package inventories, staged file replacement, complete backups, fast-forward-only Git updates, and cross-process installation leases. Preserve room data, native sessions, custom files and directory symlinks.
+- Offline, unpublished, edited, pinned or busy installations defer instead of resetting state or interrupting active agents. Retained viewers pin loaded code/assets; their next start refreshes old services without resetting rooms. Existing pre-v0.12 skills require one initial upgrade.
+- Add reproducible release inventory/package tooling and Chinese/English update documentation. Model CLIs and credentials are outside the update scope.
+
+## 0.11.0 — Claude implementation tasks
+
+- Delegate implementation, tests and code review to one Claude worker in an isolated Git worktree while the initiating conversation retains host context.
+- Snapshot current source edits without staging or changing source HEAD; inspect real Git evidence, record host checks, review exact snapshots and resume the same native session for rework.
+- Apply accepted changes without overwriting changed destination files or unrelated edits. Show task events, checks, reviews and application state in the existing local viewer.
+- Task budgets default to 60 minutes and five worker attempts; extensions require the user's decision. Preserve partial work and native identity after failures.
+
 ## 0.10.2 — Incremental context after continuation
 
 - Fixed group continuation replaying the entire transcript on every subsequent role call. Each role now receives a full replay once per extension, then only unseen events in the same native session.

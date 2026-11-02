@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 import chat
 import peer
 import view
+import runtime
 
 
 class ViewerTests(unittest.TestCase):
@@ -149,6 +151,39 @@ class ViewerTests(unittest.TestCase):
         restarted = self.command("start")
         self.assertFalse(restarted["duplicate"])
         self.info = view.running(self.room)
+
+    def test_retained_viewer_pins_assets_and_does_not_block_installation_update(self):
+        self.command("close")
+        while view.running(self.room):
+            time.sleep(0.05)
+        copied = self.root / "installed-skill"
+        shutil.copytree(SCRIPTS, copied / "scripts")
+        shutil.copytree(SCRIPTS.parent / "web", copied / "web")
+        shutil.copy2(SCRIPTS.parent / "VERSION", copied / "VERSION")
+        result = subprocess.run([sys.executable, str(copied / "scripts" / "view.py"), "start", "--room", str(self.room)],
+                                capture_output=True, text=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.info = view.running(self.room)
+        self.origin = self.info["origin"]
+        before = self.http("/app.js")[2]
+        with runtime.Lease(copied, exclusive=True):
+            (copied / "web" / "app.js").write_text("updated installation assets")
+            self.assertEqual(self.http("/app.js")[2], before)
+            self.assertEqual(self.http("/api/state")[0], 200)
+            self.assertEqual(self.http("/api/export")[0], 200)
+
+    def test_start_replaces_an_older_viewer_without_resetting_room(self):
+        old_pid = self.info["pid"]
+        peer.write_json(view.directory(self.room) / "status.json", {**self.info, "skill_version": "old"})
+        result = self.command("start")
+        self.assertFalse(result["duplicate"])
+        self.assertNotEqual(result["pid"], old_pid)
+        self.info = view.running(self.room)
+        self.origin = self.info["origin"]
+        self.assertEqual(self.info["skill_version"], view.SKILL_VERSION)
+        data = json.loads(self.http("/api/state")[2])
+        self.assertEqual(data["status"]["phase"], "discussing")
+        self.assertEqual(len(data["events"]), 1)
 
     @unittest.skipIf(os.name == "nt", "CLI fixture uses a Unix executable shebang")
     def test_page_stop_cancels_an_active_foreground_cli(self):
