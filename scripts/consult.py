@@ -73,7 +73,10 @@ def model_state(room):
 
 
 def snapshot(room, config):
-    return peer.snapshot(argparse.Namespace(room=room, agent=config["reviewer"]))
+    status, events = peer.snapshot(argparse.Namespace(room=room, agent=config["reviewer"]))
+    if status.get("mode") == "group":
+        chat.fail("this consultation now uses group rounds; use group.py status or round on the original room")
+    return status, events
 
 
 def initialize(args):

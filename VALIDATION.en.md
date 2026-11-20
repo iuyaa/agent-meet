@@ -4,11 +4,17 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
+## v0.13.0 in-meeting invitations and assignments
+
+- Six regression tests cover promoting a consultation in place, giving invitees selected evidence, preserving frozen inputs, assigning work before a guest first speaks, reviewing the current read-only result, and resuming the original session for rework.
+- A simulated Claude in a real temporary Git repository verifies isolated edits, actual checks, snapshot review, application, and interruption when the meeting stops. The tests verify that open tasks block a conclusion draft.
+- Three Chromium flows passed. The group viewer verifies task progress, result links, and acceptance in the original room. Model output was simulated, and this feature has not been tested on native Windows or against live models.
+
+## v0.12.0 skill updates
+
 `python3 -m unittest discover -s tests -v` discovered **163 tests**:
 **162 passed**, and one native Windows Job Object check was skipped on Linux.
 This includes the previous 119 regressions plus two viewer-update checks, 21 task tests, 20 updater tests and one Windows-only test.
-
-## v0.12.0: skill updates
 
 - Twenty updater tests cover published-version checks, one-hour metadata caching,
   forced checks, offline/unpublished versions, no downgrades, checksum/inventory

@@ -90,7 +90,7 @@ def database(path, write=False):
 def event(row):
     result = dict(row)
     result["created"] = utc(result["created"])
-    if result["kind"].startswith("task_") or result["kind"] in ("proposal", "review", "assessment", "extension", "finalization"):
+    if result["kind"].startswith(("task_", "meeting_")) or result["kind"] in ("proposal", "review", "assessment", "extension", "finalization"):
         result["body"] = json.loads(result["body"])
     return result
 
@@ -244,10 +244,11 @@ def validate_conclusion(conn, data):
         fail("evidence_message_ids must be a nonempty list of positive integer message IDs")
     authors = set()
     for message_id in ids:
-        row = conn.execute("SELECT sender FROM events WHERE id = ? AND kind = 'message'", (message_id,)).fetchone()
+        row = conn.execute("SELECT sender,kind FROM events WHERE id = ? AND kind IN ('message','meeting_result')", (message_id,)).fetchone()
         if not row:
-            fail(f"evidence message {message_id} does not exist or is not a discussion message")
-        authors.add(row["sender"])
+            fail(f"evidence {message_id} is not a discussion message or a recorded task result")
+        if row["kind"] == "message":
+            authors.add(row["sender"])
     names = set(json.loads(conn.execute("SELECT participants FROM room").fetchone()[0]))
     if authors != names:
         fail("a proposal needs evidence from all participants")
@@ -376,6 +377,15 @@ def export(args):
         for role in status["roles"]:
             lines += [f"- {role['id']}：{role['title']} · {role['backend']}；{role['focus']}"]
         lines += ["", "审核进度：" + str(len(status["reviews"])) + " / " + str(len(status["roles"]) - 1), ""]
+        if status["work_items"]:
+            from meeting import WORK_STATES
+            lines += ["## 会议任务", ""]
+            for item in status["work_items"]:
+                label = "已应用" if item["applied"] else WORK_STATES.get(item["state"], item["state"])
+                lines.append(f"- {item['title']} · {item['assignee']} · {label}")
+                if item.get("result_id"):
+                    lines.append(f"  - 结果 #{item['result_id']}：" + " ".join(item["summary"].splitlines()))
+            lines.append("")
     final = status.get("latest_finalization")
     result_label = labels[status["conclusion_status"]]
     if status.get("finalization_status") == "pending":

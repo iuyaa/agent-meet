@@ -14,6 +14,7 @@ let lastEvents = '',
   lastBriefing = '',
   lastOutcome = '',
   lastRoster = '',
+  lastWork = '',
   lastAssessment = '',
   stopped = false;
 let foldState;
@@ -265,6 +266,8 @@ function message(event, data) {
   body.id = 'body-' + event.id;
   if (event.kind.startsWith('task_')) {
     body.append(taskEvent(event));
+  } else if (event.kind.startsWith('meeting_')) {
+    body.append(meetingEvent(event, data.roles));
   } else if (event.kind === 'finalization') {
     const historical = data.status.latest_finalization?.id !== event.id;
     body.append(
@@ -383,6 +386,66 @@ function message(event, data) {
   );
   return el;
 }
+const workStates = {
+  assigned: '待执行', running: '执行中', ready_for_review: '待验收', blocked: '受阻',
+  failed: '执行失败', changes_requested: '待返工', accepted: '已验收', cancelled: '已取消',
+};
+
+function eventLink(id, label = '#' + id) {
+  const link = node('a', label);
+  link.href = '#event-' + id;
+  return link;
+}
+
+function meetingEvent(event, roles) {
+  const body = event.body;
+  const labels = {
+    meeting_invite: '邀请加入', meeting_assignment: '分派任务', meeting_started: '开始执行',
+    meeting_result: '提交任务结果', meeting_failed: '任务执行失败', meeting_review: '任务审核',
+    meeting_cancelled: '取消任务', meeting_check: '任务检查', meeting_applied: '应用变更', meeting_extended: '追加任务预算',
+  };
+  const title = body.role?.title || body.task_id;
+  const content = node('div');
+  content.append(node('div', labels[event.kind] + ' · ' + title, 'proposal-label'));
+  if (body.spec) {
+    const assignee = roles.find((role) => role.id === body.assignee)?.title || body.assignee;
+    content.append(node('p', assignee + ' · ' + (body.type === 'readonly' ? '只读任务' : '实现任务')),
+      node('strong', body.spec.title), markdown(body.spec.instructions), markdown(body.spec.context));
+    list(content, '约束', body.spec.constraints);
+    list(content, '验收标准', body.spec.acceptance_criteria);
+  }
+  if (body.context) content.append(markdown(body.context));
+  if (body.summary) content.append(markdown(body.summary));
+  if (body.comment || body.reason) content.append(markdown(body.comment || body.reason));
+  if (body.state && !body.spec) content.append(node('p', workStates[body.state], 'muted'));
+  if (body.result_id) content.append(eventLink(body.result_id, '查看审核结果所依据的提交'));
+  if (body.evidence_event_ids?.length) {
+    const evidence = node('p', '会议依据 ');
+    for (const id of body.evidence_event_ids) evidence.append(eventLink(id), ' ');
+    content.append(evidence);
+  }
+  if (event.kind === 'meeting_check') content.append(node('p', body.passed ? '通过' : '未通过'));
+  if (body.changed_files?.length) list(content, '变更文件', body.changed_files);
+  if (body.worker_tests?.length) list(content, '执行者报告的测试', body.worker_tests);
+  if (body.remaining_issues?.length) list(content, '待解决问题', body.remaining_issues);
+  return content;
+}
+
+function renderMeetingWork(data) {
+  const items = data.status.work_items || [];
+  const signature = JSON.stringify([items, data.roles]);
+  if (signature === lastWork) return;
+  $('work-panel').hidden = !items.length;
+  $('work-list').replaceChildren(...items.map((item) => {
+    const row = node('div', undefined, 'role-card');
+    const assignee = data.roles.find((role) => role.id === item.assignee)?.title || item.assignee;
+    row.append(node('strong', item.title), node('span', assignee + ' · ' + (item.applied ? '已应用' : workStates[item.state])),
+      eventLink(item.result_id || item.event_id, item.result_id ? '查看任务结果' : '查看任务记录'));
+    return row;
+  }));
+  lastWork = signature;
+}
+
 function taskEvent(event) {
   const b = event.body;
   const el = node('div', undefined, 'structured');
@@ -521,6 +584,7 @@ function render(data) {
     worker = data.worker;
   stopped = s.phase === 'closed';
   const isGroup = s.mode === 'group';
+  renderMeetingWork(data);
   const display = (id) => data.roles?.find((role) => role.id === id)?.title || id;
   const active = Object.entries(data.workers || {}).filter(([, w]) =>
     ['thinking', 'calling', 'response_ready'].includes(w.state),

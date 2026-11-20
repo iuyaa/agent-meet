@@ -120,6 +120,14 @@ def active(conn):
     value = state(conn)
     if value["phase"] == "closed":
         chat.fail("task is closed: " + value["close_reason"] + "; explicitly extend its budget to continue if appropriate")
+    check_meeting(config(conn))
+
+
+def check_meeting(value):
+    intent = value["init"]
+    if intent.get("meeting_room"):
+        import meeting
+        meeting.require_linked_work(intent["meeting_room"], intent["meeting_task_id"])
 
 
 def read_json(filename):
@@ -155,6 +163,9 @@ def init(args):
     area.mkdir(parents=True, exist_ok=True)
     intent = {"spec": spec, "source": str(project), "main": args.main,
               "cli": args.cli, "model": args.model, "minutes": args.minutes, "attempts": args.attempts}
+    if getattr(args, "meeting_room", None):
+        intent["meeting_room"] = str(Path(args.meeting_room).resolve())
+        intent["meeting_task_id"] = args.meeting_task_id
     with peer.participant_lock(area):
         if room.exists():
             with chat.database(room) as conn:
@@ -229,6 +240,7 @@ def run(args):
         call_dir.mkdir(exist_ok=True)
         model_args = argparse.Namespace(room=args.room, agent="claude-worker", cwd=value["worktree"],
                                         cli=value["cli"], backend="claude", model=value["model"],
+                                        meeting_room=value["init"].get("meeting_room"),
                                         turn_timeout=args.turn_timeout, task_mode=True, task_initial_session=initial)
         info = {"native_session_id": value["native_session_id"], "agent": "claude-worker"}
         context = {"worktree": value["worktree"], "task": value["spec"] if initial else None,
@@ -236,6 +248,8 @@ def run(args):
                    "instruction": "Implement the task" if initial else "Continue the original task; address the host feedback and actual check results below.",
                    "host_feedback": value.get("feedback")}
         try:
+            if getattr(args, "on_started", None):
+                args.on_started()
             result = peer.model_response(model_args, area, call_dir, info, RULES + "\n" + payload(context), 1, RESPONSE_SCHEMA)
             validate_result(result)
             peer.write_json(call_dir / "response.json", result)
@@ -285,7 +299,8 @@ def check(args):
             with log.with_suffix(".stdout.txt").open("wb") as out, log.with_suffix(".stderr.txt").open("wb") as err:
                 with processes.owned(argv, cwd=value["worktree"], stdin=subprocess.DEVNULL, stdout=out, stderr=err) as process:
                     while process.poll() is None:
-                        peer.check_stop(argparse.Namespace(room=args.room, agent=args.agent), area)
+                        peer.check_stop(argparse.Namespace(room=args.room, agent=args.agent,
+                                                          meeting_room=value["init"].get("meeting_room")), area)
                         if time.time() - started >= args.timeout:
                             chat.fail("check timed out")
                         time.sleep(0.1)
@@ -373,6 +388,7 @@ def apply(args):
             value = config(conn)
             host(value, args.agent)
             prior = existing(conn, args.request_id, "apply", {"agent": args.agent})
+            check_meeting(value)
             if value["state"] != "accepted":
                 chat.fail("host must accept the exact snapshot before applying")
             taskgit.verify(value)
@@ -402,6 +418,7 @@ def extend(args):
                 return {**prior, "duplicate": True}
             if value["state"] == "accepted":
                 chat.fail("accepted task is complete; start a new task for new work")
+            check_meeting(value)
             conn.execute("UPDATE room SET stop_reason=NULL,expires=MAX(expires,?)+?,discuss_until=MAX(expires,?)+?",
                          (time.time(), args.minutes * 60, time.time(), args.minutes * 60))
             value["max_attempts"] += args.attempts
@@ -429,7 +446,7 @@ def export_record(args, status, events):
     return {"output": str(output), "event_count": len(events), "task_state": status["task_state"]}
 
 
-def main(argv=None):
+def parser():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "run", "inspect", "check", "review", "apply", "extend", "status"):
@@ -462,7 +479,11 @@ def main(argv=None):
             p.add_argument("--minutes", type=float, default=0)
             p.add_argument("--attempts", type=int, default=0)
             p.add_argument("--reason", required=True)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv=None):
+    args = parser().parse_args(argv)
     try:
         if args.command == "status":
             with chat.database(args.room) as conn:

@@ -6,6 +6,7 @@ host, whether it is Codex, Claude Code, pi, OpenCode or another capable agent.
 Always set `--main` to its actual identity; do not inherit a Codex label from examples.
 For a plain two-agent exchange without these options, `consult.py` remains
 available. Never initialize both modes into the same room.
+For an invitation or task in an active room, use [live meeting coordination](live-meeting.md).
 
 Replace `HOST` in every example with your actual initiating identity. See
 [agent adapters](agent-adapters.md) for supported engines and reverse-host examples.
@@ -23,7 +24,7 @@ Users can set everything in their initial natural-language instruction, e.g.:
   each role's `backend` with `claude`, `codex`, `pi` or `opencode` if specified. Do not silently mix.
 - Each additional role gets its own native session and independently resumed
   context. Each invited role requires its backend's installed/configured local CLI. The current host itself needs no additional CLI.
-- By default, five requested roles means five roles **plus the current host**.
+- Create only the roles the user requests or authorizes. The current host can also take one of those roles.
   If the user assigns the current host one of the roles (e.g. architect), use
   `--main-title 架构师 --main-focus ...` and create only the other four in the file.
   You must adopt that host role in your own judgement and follow-ups.

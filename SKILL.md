@@ -1,6 +1,6 @@
 ---
 name: agent-meet
-description: Check for published Agent-Meet updates before use and update this installation when idle and unmodified. Delegate implementation, tests and code review to Claude in an isolated Git worktree with original-host acceptance and same-session rework. Discuss across Codex, Claude, pi and OpenCode, with any of them hosting from its current conversation. Configure roles and rounds, assess readiness before any draft, extend the same room on the user's decision and resume original native sessions. Show Markdown messages, folding, assessments and reviewed conclusions in a local page. Requires Python 3 and configured local role CLIs.
+description: Check for Agent-Meet updates before use. Discuss across Codex, Claude, pi and OpenCode from the original host conversation. Invite roles during a meeting, assign read-only work or Claude implementation in an isolated Git worktree, and review results in the same room. Configure rounds, assess readiness before drafting, and resume original native sessions for continuation and rework. Show Markdown messages, tasks, assessments and conclusions in a local page. Requires Python 3 and configured local role CLIs.
 ---
 
 # Agent-Meet
@@ -53,7 +53,16 @@ installs require a clean `main` branch with the official origin and fast-forward
 only. All room data and CLI-native sessions remain intact. Details and manual
 commands: [updates](references/updates.md).
 
-**For coding, fixing, testing or code-review assignments to Claude**, read
+**To invite a role or assign work during an existing meeting**, read
+[live meeting coordination](references/live-meeting.md) and use `scripts/meeting.py`
+on its ORIGINAL room. You can bring in a role with a narrow brief and named
+evidence, assign work to that role or a participant already present, and feed the
+verified results back into the discussion. Use the user's authorized work scope
+when deciding between read-only inspection and implementation. Resolve each task
+before drafting, and cite its relevant results as evidence. Report when an existing
+managed consultation becomes a group room, then use `group.py` for its next reply.
+
+**For standalone coding, fixing, testing or code-review assignments to Claude**, read
 [task workflow](references/task-workflow.md) FIRST and use `scripts/task.py`.
 Keep this original conversation as host; one Claude worker edits an isolated Git
 worktree. Inspect actual Git changes, run meaningful host checks, review or send

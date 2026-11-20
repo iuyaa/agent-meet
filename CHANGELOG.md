@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.0 — In-meeting invitations and assignments
+
+- Invite roles during the current round, with a host brief and selected evidence. Promote a managed consultation in place while preserving the room, event IDs and original peer session.
+- Assign read-only work in a role's discussion session or implementation to a Claude role in an isolated worktree. Review the exact result, resume the corresponding session for rework, and explicitly apply accepted changes.
+- Show invitations, task progress, results and reviews in the room. Resolve open tasks before proposing a conclusion and cite relevant task results in the assessment and conclusion.
+
 ## 0.12.0 — Skill update preflight
 
 - Guide the current host to check published Agent-Meet versions before each operation, with a one-hour cache and explicit forced checks. Update the same installation when idle and unmodified, then re-read SKILL.md.

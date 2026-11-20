@@ -157,6 +157,10 @@ def publish(directory, info, state, **extra):
 def check_stop(args, directory):
     if (directory / "stop.request").exists():
         raise Interrupted("peer stop requested")
+    if getattr(args, "meeting_room", None):
+        with chat.database(args.meeting_room) as conn:
+            if chat.state(conn)["phase"] == "closed":
+                raise Interrupted("parent meeting closed; work paused")
     status, _ = snapshot(args)
     if status["phase"] == "closed":
         raise Interrupted("discussion closed: " + str(status["close_reason"]))

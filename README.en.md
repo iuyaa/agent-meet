@@ -74,6 +74,14 @@ Use Claude by default and Codex for the architect. You host the discussion.
 You choose the roles, their number, and their responsibilities. Invited roles default to Claude when no backend is specified.
 Different roles using the same backend have separate sessions. The host can also take one of the requested roles.
 
+**Invite a role or assign work during a meeting**
+
+```text
+Bring a developer into the current meeting. Ask them to check the interface constraints, cite the source, and bring their findings back to this discussion.
+```
+
+The host can invite a new role or assign work to someone already present. The room shows invitations, task progress, results, and reviews. For code changes, a Claude role can work in an isolated Git worktree for the host to review and apply. [In-meeting invitations and assignments](docs/USAGE.en.md#in-meeting-invitations-and-assignments)
+
 **Continue the same discussion**
 
 ```text

@@ -209,6 +209,29 @@ let browser;
     const argv = calls.at(-1).argv;
     assert.equal(argv[argv.indexOf('--resume') + 1], originalSessions[role.id]);
   }
+  const taskFile = path.join(root, 'task.json');
+  fs.writeFileSync(taskFile, JSON.stringify({
+    title: '核对验收条件', instructions: '汇总 **验收证据**。', context: '来自同一房间的第三轮。',
+    constraints: ['只读检查'], acceptance_criteria: ['引用会议证据'],
+  }));
+  function meetingArgs(id) {
+    return ['--as', 'codex', '--task-id', 'verify', '--request-id', id];
+  }
+  const assignment = command('meeting.py', 'assign', ...meetingArgs('assign'), '--type', 'readonly',
+    '--to', roles[0].id, '--file', taskFile, '--evidence-event', '1');
+  await page.waitForSelector('#work-panel');
+  assert.match(await page.locator('#work-list').innerText(), /核对验收条件[\s\S]*待执行/);
+  await page.waitForSelector('#event-' + assignment.event.id + ' strong');
+  const taskRun = run(python, args('meeting.py', 'run', meetingArgs('run')), { encoding: 'utf8' });
+  await page.waitForFunction(() => document.getElementById('work-list').textContent.includes('执行中'));
+  const workResult = JSON.parse((await taskRun).stdout).event;
+  await page.waitForFunction(() => document.getElementById('work-list').textContent.includes('待验收'));
+  assert.equal(await page.locator('#work-list a').getAttribute('href'), '#event-' + workResult.id);
+  const reviewFile = path.join(root, 'task-review.md');
+  fs.writeFileSync(reviewFile, '已检查依据。');
+  command('meeting.py', 'review', ...meetingArgs('accept'), '--decision', 'accept', '--text-file', reviewFile,
+    '--result', String(workResult.id));
+  await page.waitForFunction(() => document.getElementById('work-list').textContent.includes('已验收'));
   proposal.evidence_message_ids = command('chat.py', 'read', '--as', 'codex')
     .events.filter((event) => event.kind === 'message')
     .map((event) => event.id);

@@ -83,8 +83,10 @@ def state(conn, room=None):
     reason = room["stop_reason"] or ("agreement" if confirmed else "expired" if time.time() >= room["expires"] else None)
     summarizing = time.time() >= room["discuss_until"] or completed >= settings["rounds"]
     phase = "closed" if reason else "summarizing" if summarizing else "discussing"
+    import meeting
     return lifecycle.enrich(conn, {"mode": "group", "main": main, "topic": room["topic"],
             "participants": [main] + names, "roles": public_roles(settings),
+            "work_items": meeting.work_items(events),
             "joined": [r[0] for r in conn.execute("SELECT name FROM members ORDER BY joined, name")],
             "phase": phase, "close_reason": reason, "message_count": len(messages),
             "max_messages": room["max_messages"], "current_round": current,
@@ -161,36 +163,53 @@ def append(conn, args):
             "duplicate": False, "status": state(conn)}
 
 
+def validate_role(role, names):
+    if not isinstance(role, dict) or not {"id", "title", "focus"} <= set(role) or set(role) - {
+            "id", "title", "focus", "backend", "cli", "model"}:
+        chat.fail("each role requires id, title, focus; optional: backend, cli, model")
+    name = role["id"]
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", name) or name in names:
+        chat.fail("role IDs must be unique safe identities, distinct from the host")
+    names.add(name)
+    role = {**role, "title": chat.nonempty(role["title"], "title"), "focus": chat.nonempty(role["focus"], "focus")}
+    role.setdefault("backend", "claude")
+    if role["backend"] not in peer.adapters.BACKENDS:
+        chat.fail("role backend must be one of: " + ", ".join(peer.adapters.BACKENDS))
+    role["cli"] = chat.nonempty(role.get("cli", role["backend"]), "cli")
+    peer.cli_prefix(role["cli"], role["backend"])
+    role["cli"] = str(Path(shutil.which(role["cli"])).resolve())
+    if "model" in role:
+        role["model"] = chat.nonempty(role["model"], "model")
+    return role
+
+
 def load_roles(path, main_id, main_title, main_focus):
     roles = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     if not isinstance(roles, list) or not 1 <= len(roles) <= 8:
         chat.fail("roles-file must contain 1–8 role objects")
+    if not isinstance(main_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", main_id):
+        chat.fail("invalid main identity")
     main = {"id": main_id, "title": chat.nonempty(main_title, "main-title"),
             "focus": chat.nonempty(main_focus, "main-focus"), "backend": "existing"}
     names = {main_id}
-    for role in roles:
-        if not isinstance(role, dict) or not {"id", "title", "focus"} <= set(role) or set(role) - {
-                "id", "title", "focus", "backend", "cli", "model"}:
-            chat.fail("each role requires id, title, focus; optional: backend, cli, model")
-        name = role["id"]
-        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", name) or name in names:
-            chat.fail("role IDs must be unique safe identities, distinct from the host")
-        names.add(name)
-        for key in ("title", "focus"):
-            role[key] = chat.nonempty(role[key], key)
-        role.setdefault("backend", "claude")
-        if role["backend"] not in peer.adapters.BACKENDS:
-            chat.fail("role backend must be one of: " + ", ".join(peer.adapters.BACKENDS))
-        role.setdefault("cli", role["backend"])
-        role["cli"] = chat.nonempty(role["cli"], "cli")
-        peer.cli_prefix(role["cli"], role["backend"])
-        role["cli"] = str(Path(shutil.which(role["cli"])).resolve())
-        if "model" in role:
-            role["model"] = chat.nonempty(role["model"], "model")
-    if not isinstance(main_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", main_id):
-        chat.fail("invalid main identity")
+    roles = [validate_role(role, names) for role in roles]
     chat.nonempty(json.dumps([main] + roles, ensure_ascii=False), "role configuration")
     return main, roles
+
+
+def setup_tables(conn):
+    conn.execute("ALTER TABLE events ADD COLUMN round_index INTEGER NOT NULL DEFAULT 1")
+    conn.execute("CREATE TABLE group_config(body TEXT NOT NULL)")
+    conn.execute("CREATE TABLE group_sessions(agent TEXT PRIMARY KEY,backend TEXT NOT NULL,native_session_id TEXT NOT NULL,UNIQUE(backend,native_session_id))")
+
+
+def bind_session(conn, role, session):
+    conn.execute("INSERT OR IGNORE INTO group_sessions VALUES(?,?,?)", (role["id"], role["backend"], session))
+    owner = conn.execute("SELECT native_session_id FROM group_sessions WHERE agent=?", (role["id"],)).fetchone()
+    if not owner:
+        chat.fail("different roles returned the same native session")
+    if owner[0] != session:
+        chat.fail("role attempted to replace its native session")
 
 
 def initialize(args):
@@ -220,9 +239,7 @@ def initialize(args):
             pass
         with sqlite3.connect(target) as conn:
             conn.executescript(chat.SCHEMA)
-            conn.execute("ALTER TABLE events ADD COLUMN round_index INTEGER NOT NULL DEFAULT 1")
-            conn.execute("CREATE TABLE group_config(body TEXT NOT NULL)")
-            conn.execute("CREATE TABLE group_sessions(agent TEXT PRIMARY KEY,backend TEXT NOT NULL,native_session_id TEXT NOT NULL,UNIQUE(backend,native_session_id))")
+            setup_tables(conn)
             lifecycle.setup(conn)
             now = time.time()
             conn.execute("INSERT INTO room VALUES(1,2,?,?,?,?,?,?,NULL)",
@@ -254,6 +271,8 @@ def status(room):
             "finish or explicitly extend on the user's continuation request" if current["phase"] == "closed" else
             "call pending roles" if current["pending_reviewers"] or
             any(r["id"] in current["pending_speakers"] for r in settings["roles"]) else
+            "resolve open meeting tasks before drafting a conclusion" if any(
+                item["state"] not in ("accepted", "cancelled") for item in current["work_items"]) else
             "original host follows up or proposes a conclusion"}
 
 
@@ -263,16 +282,8 @@ def commit_response(room, role, cached, request_id):
     if result.get("action") not in allowed:
         chat.fail("role returned an action that is not allowed")
     with chat.database(room, write=True) as conn:
-        old = conn.execute("SELECT * FROM group_sessions WHERE agent=?", (role["id"],)).fetchone()
-        if old and old["native_session_id"] != cached["native_session_id"]:
-            chat.fail("role attempted to replace its native session")
         try:
-            conn.execute("INSERT OR IGNORE INTO group_sessions VALUES(?,?,?)",
-                         (role["id"], role["backend"], cached["native_session_id"]))
-            owner = conn.execute("SELECT agent FROM group_sessions WHERE backend=? AND native_session_id=?",
-                                 (role["backend"], cached["native_session_id"])).fetchone()
-            if not owner or owner["agent"] != role["id"]:
-                chat.fail("different roles returned the same native session; refusing to mix their context")
+            bind_session(conn, role, cached["native_session_id"])
             current = state(conn)
             if current["epoch"] != cached.get("epoch", 0):
                 chat.fail("discussion was extended; no stale role response was recorded")
@@ -335,12 +346,16 @@ def call_role(args, role, settings, batch, digest):
             # Replay history once after each extension to cover interrupted
             # rounds; later calls resume the same session with only new events.
             replay_history = batch.get("epoch", 0) > info.get("history_epoch", 0)
+            welcome = batch.get("welcomes", {}).get(role["id"])
             context = {"your_identity": role["id"], "your_role": {k: role[k] for k in ("id", "title", "focus", "backend")},
-                       "main_identity": settings["main"]["id"], "roles": public_roles(settings),
+                       "main_identity": settings["main"]["id"], "roles": (welcome or batch["status"])["roles"],
                        "project_directory": settings["cwd"], "topic": settings["briefing"]["question"],
                        "briefing": settings["briefing"], "round_index": batch["round_index"],
                        "max_rounds": settings["rounds"], "allowed_actions": batch["allowed"],
                        "status": batch["status"], "new_events": [e for e in batch["events"] if replay_history or e["id"] > info.get("read_cursor", 0)]}
+            if welcome:
+                context["invitation"] = welcome["invitation"]
+                context["invitation_evidence"] = welcome["evidence"]
             namespace = argparse.Namespace(room=args.room, agent=role["id"], backend=role["backend"],
                                           cli=role["cli"], model=role.get("model"), cwd=settings["cwd"],
                                           turn_timeout=args.turn_timeout)
@@ -416,6 +431,14 @@ def run_round(args):
                      "proposal": current["latest_proposal"]["id"] if current["pending_reviewers"] else None,
                      "allowed": ["review"] if current["pending_reviewers"] else ["send"],
                      **shared}
+            invitations = {e["body"]["role"]["id"]: e for e in events if e["kind"] == "meeting_invite"}
+            batch["welcomes"] = {}
+            for name in selected:
+                invite = invitations.get(name)
+                if invite and invite["round_index"] == current["current_round"] and not current["pending_reviewers"]:
+                    evidence = set(invite["body"]["evidence_event_ids"])
+                    batch["welcomes"][name] = {"invitation": invite, "roles": current["roles"],
+                                              "evidence": [e for e in events if e["id"] in evidence]}
             peer.write_json(batch_file, batch)
         roles = [r for r in settings["roles"] if r["id"] in batch["selected"]]
         results, errors = {}, {}

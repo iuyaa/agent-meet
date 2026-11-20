@@ -32,7 +32,7 @@ def metadata(conn):
 
 
 def activity(conn):
-    return conn.execute("SELECT COALESCE(MAX(id),0) FROM events WHERE kind IN ('message','review','extension')").fetchone()[0]
+    return conn.execute("SELECT COALESCE(MAX(id),0) FROM events WHERE kind IN ('message','review','extension') OR kind GLOB 'meeting_*'").fetchone()[0]
 
 
 def enrich(conn, value):
@@ -53,8 +53,15 @@ def enrich(conn, value):
 
 
 def require_conclusion(conn, value):
+    require_resolved_tasks(value)
     if installed(conn) and (not value["assessment_fresh"] or value["assessment_status"] != "conclude"):
         chat.fail("record a fresh host assessment deciding 'conclude' before proposing; use chat.py assess")
+
+
+def require_resolved_tasks(value):
+    pending = [item["id"] for item in value.get("work_items", []) if item["state"] not in ("accepted", "cancelled")]
+    if pending:
+        chat.fail("resolve or explicitly cancel open meeting tasks: " + ", ".join(pending))
 
 
 def main_identity(value):
@@ -82,12 +89,13 @@ def validate_assessment(conn, body, value):
         chat.fail("assessment evidence must contain positive event IDs")
     authors = set()
     for event_id in ids:
-        row = conn.execute("SELECT * FROM events WHERE id=? AND kind IN ('message','proposal','review')", (event_id,)).fetchone()
+        row = conn.execute("SELECT * FROM events WHERE id=? AND kind IN ('message','proposal','review','meeting_result')", (event_id,)).fetchone()
         if not row:
             chat.fail("assessment evidence does not reference an actual discussion event")
         if row["kind"] == "message":
             authors.add(row["sender"])
     if body["decision"] == "conclude":
+        require_resolved_tasks(value)
         if authors != set(value["participants"]):
             chat.fail("concluding requires evidence from every participant")
         if value.get("mode") == "group":

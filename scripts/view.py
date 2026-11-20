@@ -21,6 +21,7 @@ from pathlib import Path
 import chat
 import consult
 import group
+import meeting  # A pair room can become a group while its viewer stays open.
 import peer
 import processes
 import task  # Preload all installed protocol modules before releasing the viewer lease.

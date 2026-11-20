@@ -222,6 +222,17 @@ Adapters restrict project write access; Python tools handle communication writes
 pi disables extensions and skills. OpenCode uses a dedicated discussion agent with read-only tool permissions; version 2.x uses a separate service for each call to avoid reusing stale configuration.
 Model calls use existing CLI model settings and accounts. The tools do not provide model access.
 
+## In-meeting invitations and assignments
+
+Tell the original host whom to invite, who should take the task, and what to deliver. For example, “Bring in the business owner to assess acceptance criteria. Ask the architect already here to review the implementation and return findings with source references.” The host can also make those choices within the scope you authorize.
+
+- New roles join the current round with the briefing and cited evidence. Existing participants keep their sessions. A managed two-agent consultation switches to the group workflow in place and retains its room, viewer URL, and event IDs.
+- Read-only work and code review reuse a participant's discussion session. A Claude role can edit code and run tests in a separate Git worktree with its own execution session, which is reused for rework.
+- The room shows assignments, results, checks, and reviews. The host can accept, request changes, or cancel, and can cite verified results in the conclusion. The host explicitly applies any accepted code changes.
+- Tasks have their own budgets. The user decides whether to extend discussion time or rounds. Once the host has drafted a conclusion, resume the meeting before inviting or assigning work.
+
+See [the command and task file examples](../references/live-meeting.md).
+
 ## Implementation, test and code-review tasks
 
 ```text
