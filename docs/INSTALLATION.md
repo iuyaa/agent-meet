@@ -45,6 +45,17 @@ Skills CLI 可能为多个宿主使用共享技能目录，而不是逐一复制
 `npx skills` 从 GitHub 安装这个仓库，本项目无需发布额外的 npm 安装包。
 Node.js 用于安装器，讨论仍由 Python 和各 agent CLI 执行。
 
+## 安装 DSH 或 Qwen Code 参与者
+
+在运行主持 Agent 的环境中安装需要用到的 CLI。
+
+```bash
+npm install -g @deepseek-ai/dsh@0.2.2-rc.5
+npm install -g @qwen-code/qwen-code@0.28.0
+```
+
+DSH 需要 Node.js 24.9 或更新版本。给主持 Agent 的运行环境提供 `DEEPSEEK_API_KEY`，也可使用 DSH 支持的项目 `.env`。Qwen Code 需要 Node.js 22 或更新版本，使用已配置的模型提供方。安装后可用 `dsh --version` 或 `qwen --version` 核对版本。[CLI 与会话说明](../references/agent-adapters.md)
+
 ## 自动检查与更新
 
 从 v0.12 开始，技能会引导主持人在发起讨论、继续原会话或安排任务前执行版本检查。

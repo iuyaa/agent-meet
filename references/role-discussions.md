@@ -21,7 +21,7 @@ Users can set everything in their initial natural-language instruction, e.g.:
 
 - A role is a title plus a clear focus, independent of the CLI backend/model.
 - Default additional roles use **Claude**, as requested by the user. Override
-  each role's `backend` with `claude`, `codex`, `pi` or `opencode` if specified. Do not silently mix.
+  each role's `backend` with `claude`, `codex`, `pi`, `opencode`, `dsh` or `qwen` if specified.
 - Each additional role gets its own native session and independently resumed
   context. Each invited role requires its backend's installed/configured local CLI. The current host itself needs no additional CLI.
 - Create only the roles the user requests or authorizes. The current host can also take one of those roles.

@@ -233,6 +233,10 @@ Tell the original host whom to invite, who should take the task, and what to del
 
 See [the command and task file examples](../references/live-meeting.md).
 
+### Verify public sources during a meeting
+
+You can ask the host to invite DSH and Qwen Code, then have DSH check public documentation if a claim needs outside evidence. The host can add `--web-search` to a read-only task to enable search and fetch for that assignment. Source links return with the result, and the role can resume its meeting session. [Web research task commands](../references/live-meeting.md#verify-public-web-sources)
+
 ## Implementation, test and code-review tasks
 
 ```text

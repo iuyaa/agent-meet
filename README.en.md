@@ -6,7 +6,7 @@ Bring different AI agents into a discussion from your current conversation.
 
 When you need a second opinion or several roles to examine a problem, ask your current agent to start a discussion.
 Meet calls the invited agents, records the exchange, and lets the original host draw conclusions using the context already in your conversation.
-It supports **Codex, Claude Code, pi, and OpenCode** and runs independently of Golutra.
+It supports **Codex, Claude Code, pi, OpenCode, DeepSeek Harness (DSH), and Qwen Code**.
 
 ```text
 $agent-meet Ask Claude to review this proposal, focusing on boundaries and failure paths.
@@ -80,7 +80,7 @@ Different roles using the same backend have separate sessions. The host can also
 Bring a developer into the current meeting. Ask them to check the interface constraints, cite the source, and bring their findings back to this discussion.
 ```
 
-The host can invite a new role or assign work to someone already present. The room shows invitations, task progress, results, and reviews. For code changes, a Claude role can work in an isolated Git worktree for the host to review and apply. [In-meeting invitations and assignments](docs/USAGE.en.md#in-meeting-invitations-and-assignments)
+The host can invite a new role or assign work to someone already present. A configured DSH role can research public sources and return citations to the room. For code changes, a Claude role can work in an isolated Git worktree for the host to review and apply. [In-meeting invitations and assignments](docs/USAGE.en.md#in-meeting-invitations-and-assignments)
 
 **Continue the same discussion**
 

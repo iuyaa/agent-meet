@@ -48,6 +48,62 @@ else:
     print(json.dumps({'type':'step_finish','sessionID':sid,'part':{'reason':'length' if mode=='length' else 'stop'}}))
 '''
 
+FAKE_HEADLESS = r'''#!/usr/bin/env python3
+import json, os, sys, uuid
+from pathlib import Path
+
+backend = Path(sys.argv[0]).name.split()[-1]
+mode_path = Path('mode')
+mode = mode_path.read_text() if mode_path.exists() else 'ok'
+args = sys.argv[1:]
+if args == ['--version']:
+    print('0.0.0' if mode == 'unsupported' else {'dsh': '0.2.2-rc.5', 'qwen': '0.28.0'}[backend])
+    sys.exit(0)
+
+prompt = sys.stdin.read()
+context = json.loads(prompt.split('Discussion data:\n', 1)[1])
+name = context['your_identity']
+sid = str(uuid.uuid5(uuid.NAMESPACE_DNS, name))
+overlay = None
+resume_flag = '--session-id' if backend == 'dsh' else '--resume'
+if backend == 'dsh':
+    overlay = json.loads(Path(args[args.index('--patch') + 1]).read_text(encoding='utf-8'))
+    home = Path(os.environ['DSH_HOME'])
+    home.mkdir(parents=True, exist_ok=True)
+    saved = home / sid
+else:
+    saved = Path('session-' + sid)
+if resume_flag in args:
+    assert args[args.index(resume_flag) + 1] == sid and saved.is_file(), 'original session lost'
+saved.touch()
+with Path('calls-' + name + '.jsonl').open('a', encoding='utf-8') as handle:
+    handle.write(json.dumps({'argv': args, 'context': context, 'session': sid, 'overlay': overlay,
+                             'web_prompt': 'Cite source titles and URLs' in prompt,
+                             'home': os.environ.get('DSH_HOME')}) + '\n')
+
+action = 'review' if 'review' in context['allowed_actions'] else 'send'
+reply = {'action': action, 'text': '可核对的记录 [文档](https://example.org/docs)。',
+         'decision': 'accept' if action == 'review' else 'none',
+         'conclusion': {'summary': '', 'agreements': [], 'disagreements': [], 'open_questions': [], 'evidence_message_ids': []}}
+answer = 'not JSON' if mode == 'malformed' else json.dumps(reply)
+actual = str(uuid.uuid4()) if mode == 'switch' else sid
+if backend == 'dsh':
+    print(json.dumps({'type': 'session', 'sessionId': actual}))
+    print(json.dumps({'type': 'text', 'text': 'Earlier tool step'}))
+    if mode == 'error':
+        print(json.dumps({'type': 'error', 'message': 'fake error'}))
+    if mode != 'truncated':
+        print(json.dumps({'type': 'final', 'sessionId': 'different-id' if mode == 'mismatched-final' else actual,
+                          'reason': {'kind': 'error' if mode == 'terminal-failure' else 'completed'}, 'text': answer}))
+else:
+    print(json.dumps({'type': 'system', 'subtype': 'session_start', 'session_id': actual}))
+    if mode == 'error':
+        print(json.dumps({'type': 'system', 'subtype': 'session_recording_degraded'}))
+    if mode != 'truncated':
+        print(json.dumps({'type': 'result', 'subtype': 'success', 'session_id': actual, 'result': answer,
+                          'is_error': mode == 'terminal-failure'}))
+'''
+
 
 @unittest.skipIf(os.name == 'nt', 'subprocess fixtures use Unix shebangs')
 class AdapterTests(unittest.TestCase):
@@ -59,7 +115,8 @@ class AdapterTests(unittest.TestCase):
         self.brief.write_text(json.dumps({'question':'跨 agent 讨论','goal':'保留当前主持人','current_view':'显式恢复会话',
             'constraints':[],'decisions':[],'rejected_options':[],'code_references':[],'unknowns':[]}))
         self.clis = {}
-        for name, body in [('claude', FAKE_CLAUDE), ('codex', FAKE_CODEX), ('pi', FAKE_AGENT), ('opencode', FAKE_AGENT)]:
+        for name, body in [('claude', FAKE_CLAUDE), ('codex', FAKE_CODEX), ('pi', FAKE_AGENT), ('opencode', FAKE_AGENT),
+                           ('dsh', FAKE_HEADLESS), ('qwen', FAKE_HEADLESS)]:
             path=self.root / ('fake '+name);path.write_text(body);path.chmod(0o755);self.clis[name]=path
 
     def tearDown(self):
@@ -128,7 +185,7 @@ class AdapterTests(unittest.TestCase):
                 self.assertEqual(reviewed['status']['conclusion_status'],'confirmed')
                 self.assertEqual(reviewed['model']['native_session_id'],first['model']['native_session_id'])
 
-    def test_one_group_can_mix_all_four_engines_under_opencode_host(self):
+    def test_one_group_can_mix_all_engines_under_opencode_host(self):
         roles=[{'id':name+'-role','title':name,'focus':'核实证据','backend':name,'cli':str(cli)} for name,cli in self.clis.items()]
         path=self.root/'roles.json';path.write_text(json.dumps(roles))
         self.command('group.py','init','--cwd',self.root,'--briefing-file',self.brief,'--roles-file',path,
@@ -142,9 +199,67 @@ class AdapterTests(unittest.TestCase):
         for role in roles:
             info=peer.read_status(peer.paths(self.room,role['id']))
             self.assertTrue(info['native_session_id'])
-        for backend in ('pi','opencode'):
+        for backend in ('pi','opencode','dsh','qwen'):
             calls=self.calls(backend+'-role');self.assertEqual(len(calls),2)
             self.assertEqual(calls[1]['context']['your_role']['backend'],backend)
+
+    def test_dsh_web_scope_and_qwen_read_only_task_resume_in_original_room(self):
+        spec=self.root/'spec.json';spec.write_text(json.dumps({'title':'核对依据','instructions':'提交出处和结论',
+            'context':'核对版本变更','constraints':[],'acceptance_criteria':['列出可核对出处']}))
+        feedback=self.root/'feedback.txt';feedback.write_text('补充证据', encoding='utf-8')
+        for backend in ('dsh','qwen'):
+            with self.subTest(backend=backend):
+                self.room=self.root/f'{backend}.sqlite'
+                self.initialize(backend,'claude','--model','custom-test-model')
+                native=self.reply()['model']['native_session_id']
+                assignment=['--as','claude','--task-id','verify','--request-id','assign',
+                            '--to',backend,'--type','readonly','--file',spec]
+                if backend=='qwen':
+                    self.command('meeting.py','assign',*assignment,'--web-search',ok=False)
+                extra=['--web-search'] if backend=='dsh' else []
+                event=self.command('meeting.py','assign',*assignment,*extra)['event']
+                self.assertEqual(event['body'].get('web_search',False),backend=='dsh')
+                result=self.command('meeting.py','run','--as','claude','--task-id','verify','--request-id','run')['event']
+                self.assertIn('https://example.org/docs',result['body']['summary'])
+                self.command('meeting.py','review','--as','claude','--task-id','verify','--request-id','review',
+                             '--result',result['id'],'--decision','revise','--text-file',feedback)
+                self.command('meeting.py','run','--as','claude','--task-id','verify','--request-id','rework')
+                self.send('claude')
+                self.command('group.py','round','--request-id','followup-round')
+                calls=self.calls(backend)
+                self.assertEqual([call['session'] for call in calls],[native]*4)
+                resume='--session-id' if backend=='dsh' else '--resume'
+                self.assertNotIn(resume,calls[0]['argv'])
+                for call in calls[1:]:
+                    self.assertEqual(call['argv'][call['argv'].index(resume)+1],native)
+                if backend=='dsh':
+                    self.assertEqual(len({call['home'] for call in calls}),1)
+                    for call,enabled in zip(calls,(False,True,True,False)):
+                        patch={row['id']:row for row in call['overlay']}
+                        self.assertEqual(patch['tool-web']['disabled'],not enabled)
+                        self.assertEqual(call['web_prompt'],enabled)
+                        self.assertTrue(patch['tool-bash']['disabled'])
+                        self.assertFalse(patch['tool-fs']['config']['write'])
+                        self.assertEqual(patch['agent-default-model']['config']['model'],'custom-test-model')
+                        self.assertIn('read-only',call['argv'])
+                else:
+                    for call in calls:
+                        argv=call['argv'];excluded=set(argv[argv.index('--exclude-tools')+1].split(','))
+                        self.assertIn('--safe-mode',argv)
+                        self.assertIn('custom-test-model',argv)
+                        self.assertTrue({'run_shell_command','agent','web_search','write_file'} <= excluded)
+                        self.assertFalse({'read_file','grep_search','glob','list_directory'} & excluded)
+
+    def test_dsh_and_qwen_fail_closed_on_incomplete_and_incompatible_output(self):
+        for backend in ('dsh','qwen'):
+            modes = ('truncated','malformed','error','terminal-failure','unsupported')
+            for mode in (*modes,'mismatched-final') if backend=='dsh' else modes:
+                with self.subTest(backend=backend,mode=mode):
+                    self.room=self.root/f'{backend}-{mode}.sqlite'
+                    self.initialize(backend)
+                    (self.root/'mode').write_text(mode)
+                    self.reply(ok=False)
+                    self.assertEqual(self.command('consult.py','status')['status']['message_count'],1)
 
     def test_invalid_new_engine_outputs_never_become_discussion_messages(self):
         for backend in ('pi','opencode'):
@@ -159,7 +274,7 @@ class AdapterTests(unittest.TestCase):
                     self.assertEqual(state['status']['message_count'],1)
 
     def test_different_session_is_refused_on_resume_for_new_engines(self):
-        for backend in ('pi','opencode'):
+        for backend in ('pi','opencode','dsh','qwen'):
             with self.subTest(backend=backend):
                 self.room=self.root/(backend+'.sqlite');self.initialize(backend);first=self.reply();self.send()
                 (self.root/'mode').write_text('switch')

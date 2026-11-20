@@ -4,6 +4,12 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
+## v0.14.0 DSH and Qwen Code
+
+- Official DSH `0.2.2-rc.5` and Qwen Code `0.28.0` ran against a local model fixture. Separate processes retained the native session and its history, including read-only work after promoting a consultation to a group meeting.
+- Inspected the tools advertised to the model. DSH exposed `web_search` and `web_fetch` only for the opted-in research task. Ordinary discussion tools were limited to file reading and search in both CLIs.
+- Regression coverage includes six backends in one room, research rework, mismatched sessions, degraded recording, unsuccessful terminal events and malformed results. Live models, live public web searches and native Windows execution remain unverified.
+
 ## v0.13.0 in-meeting invitations and assignments
 
 - Six regression tests cover promoting a consultation in place, giving invitees selected evidence, preserving frozen inputs, assigning work before a guest first speaks, reviewing the current read-only result, and resuming the original session for rework.

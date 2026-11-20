@@ -20,7 +20,7 @@ The repository root is also the skill root.
 | `scripts/lifecycle.py` | Readiness assessments, user-approved extensions, and continuation in the original room |
 | `scripts/finalization.py` | Final feedback reconciliation and conclusion finalization |
 | `scripts/storage.py` | Separate project-local discussion directories and Git ignore rules |
-| `scripts/adapters.py` | Command construction and output parsing for Claude, Codex, pi, and OpenCode |
+| `scripts/adapters.py` | Command construction and output parsing for Claude, Codex, pi, OpenCode, DSH, and Qwen Code |
 | `scripts/peer.py` | Shared process control, timeouts, stopping, and native ID validation |
 | `scripts/processes.py` | Console-free Windows launches and POSIX background session policy |
 | `scripts/view.py`, `web/` | Local viewer service and message display |

@@ -6,7 +6,7 @@
 
 遇到需要第二种判断或多个角色参与的问题时，向当前 agent 发起讨论。
 Meet 会调用受邀 agent，记录讨论过程，并由原主持人结合已有上下文整理结论。
-支持 **Codex、Claude Code、pi、OpenCode**，不依赖 Golutra。
+支持 **Codex、Claude Code、pi、OpenCode、DeepSeek Harness（DSH）和 Qwen Code**，可独立运行。
 
 ```text
 $agent-meet 请 Claude 评审这个方案，重点检查边界和失败路径。
@@ -65,6 +65,7 @@ $agent-meet 请产品经理、架构师和业务负责人讨论这个需求，�
 ```
 
 主持人可以补充新角色，也可以给已有角色派工。页面会显示邀请、任务进度、结果和审核。
+需要查证公开资料时，可交给配置了搜索能力的 DSH 角色，结果和出处会回到同一房间。
 需要改代码时，可安排 Claude 角色在独立 worktree 中执行，主持人审核通过后再应用。
 [会中邀请与派工](docs/USAGE.md#会中邀请与派工)
 

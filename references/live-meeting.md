@@ -74,6 +74,24 @@ session. `--result` must name the current result event. The default per-call tim
 is 180 seconds and the default attempt budget is five. The room's time limit
 still applies.
 
+## Verify public web sources
+
+Choose a DSH role with its DeepSeek API provider configured. Add `--web-search`
+to that role's read-only assignment. Describe the exact claim and what public
+sources would settle it in the task file. Ask for URLs and note any gaps. Keep
+private project references and credentials out of web queries.
+
+```bash
+python3 scripts/meeting.py assign --room ROOM --as HOST --task-id verify-docs \
+  --request-id assign-docs --to research --type readonly --web-search --file task.json
+python3 scripts/meeting.py run --room ROOM --as HOST --task-id verify-docs --request-id verify-docs-1
+```
+
+Public search and fetch are available for this assignment, including rework.
+Ordinary discussion and later local-only work have web tools disabled. The
+host reviews the returned sources before citing the result. Configure DSH as
+described in [hosts and adapters](agent-adapters.md#backends-sessions-and-boundaries).
+
 ## Assign implementation and tests
 
 Use the same `assign` command with `--type implementation` and a task spec that

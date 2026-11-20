@@ -181,7 +181,7 @@ def model_response(args, directory, run_directory, info, prompt, turn, response_
     error_path = run_directory / f"turn-{turn:03d}.stderr.txt"
     # Prompt text goes through stdin, never through a shell or command argument.
     with input_path.open("rb") as source, output_path.open("wb") as output, error_path.open("wb") as error:
-        launch = processes.owned if getattr(args, "task_mode", False) else legacy_process
+        launch = processes.owned if getattr(args, "task_mode", False) or getattr(adapter, "owned_process", False) else legacy_process
         with launch(command, cwd=args.cwd, stdin=source, stdout=output, stderr=error, env=environment) as process:
             publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
             until = time.monotonic() + args.turn_timeout

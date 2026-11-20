@@ -44,6 +44,17 @@ Check the installer output for the actual paths. Project discussion data still g
 `npx skills` installs this repository from GitHub; this project does not need a separate npm installer package.
 Node.js runs the installer; Python and the agent CLIs run the discussions.
 
+## Install DSH or Qwen Code participants
+
+Install the CLI you want to invite in the environment that runs the host agent.
+
+```bash
+npm install -g @deepseek-ai/dsh@0.2.2-rc.5
+npm install -g @qwen-code/qwen-code@0.28.0
+```
+
+DSH requires Node.js 24.9 or later. Provide `DEEPSEEK_API_KEY` in the host environment or a project `.env` supported by DSH. Qwen Code requires Node.js 22 or later and a configured provider. Verify the installed version with `dsh --version` or `qwen --version`. [CLI and session details](../references/agent-adapters.md)
+
 ## Automatic updates
 
 Starting with v0.12, the skill asks the host to run a version preflight before

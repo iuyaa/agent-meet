@@ -251,11 +251,115 @@ class OpenCode:
         return response("".join(list(texts.values())[-1])), session
 
 
+class DeepSeek:
+    prompt_schema = True
+    owned_process = True
+    supports_web_search = True
+    npm_entries = ("@deepseek-ai/dsh/lib/bin.js",)
+    version = "0.2.2-rc.5"
+    # IDs from the supported release's dsh-base bundle. Keep its file search
+    # and reads but drop shell, delegation, writes and interactive workflows.
+    disabled = (
+        "tool-bash", "tool-pwsh", "tool-jobs", "tool-working-directory", "tool-skill",
+        "tool-plugin-manager", "tool-agent-team", "tool-subagent", "tool-subagent-fork",
+        "tool-subagent-control", "tool-workflow", "tool-goal", "tool-todo", "plan-mode",
+        "tool-executor-ptc", "mcp-resources",
+    )
+
+    def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
+        require_version(prefix, args.cwd, "dsh", self.version)
+        overlay = [{"id": row, "disabled": True} for row in self.disabled]
+        overlay.append({"id": "tool-fs", "config": {"write": False, "edit": False, "applyPatch": False}})
+        overlay.append({"id": "tool-web", "disabled": not getattr(args, "web_search", False),
+                        "config": {"fetch": True, "searchTimeoutMs": 60000}})
+        if getattr(args, "model", None):
+            overlay.append({"id": "agent-default-model", "config": {"provider": "deepseek-official", "model": args.model}})
+        patch = run_directory / "dsh-meeting.patch.yml"
+        # JSON is valid YAML. Serialize model IDs as values, never patch syntax.
+        write_json(patch, overlay)
+        command = prefix + ["--profile", "headless", "--patch", str(patch), "--json",
+                            "--permission-mode", "read-only", "--approval-policy", "never"]
+        if info.get("native_session_id"):
+            command += ["--session-id", info["native_session_id"]]
+        environment = {**os.environ, "DSH_HOME": str(directory / "dsh-home"), "DSH_PERMISSION_MODE": "read-only"}
+        return command + ["-"], environment
+
+    def parse(self, output_path, answer_path, directory, info):
+        rows = records(output_path)
+        session = session_ids(rows, "sessionId", "session")
+        final = rows[-1]
+        reason = final.get("reason")
+        if (any(row.get("type") in ("error", "final") for row in rows[:-1])
+                or final.get("type") != "final" or final.get("sessionId") != session
+                or not isinstance(reason, dict) or reason.get("kind") != "completed"
+                or not isinstance(final.get("text"), str)):
+            chat.fail(f"DSH did not complete a successful response for this session; see {output_path}")
+        return response(final["text"]), session
+
+
+def require_version(prefix, cwd, name, version):
+    reported = probe(prefix, "--version", cwd).strip()
+    if reported != version:
+        chat.fail(f"{name} adapter requires CLI version {version}; installed version is {reported!r}")
+
+
+class Qwen:
+    prompt_schema = True
+    owned_process = True
+    npm_entries = ("@qwen-code/qwen-code/cli-entry.js",)
+    version = "0.28.0"
+    # --safe-mode ignores --core-tools. Exclude the supported version's
+    # built-ins other than read_file, grep_search, glob and list_directory.
+    excluded = """
+        exec edit write_file zoom_image run_shell_command todo_write save_memory
+        manage_memory search_memory agent skill exit_plan_mode enter_plan_mode
+        web_fetch web_search image_gen lsp ask_user_question cron_create cron_list
+        cron_delete autofix_pr loop_wakeup create_sub_session list_agents task_stop
+        task_create task_update task_list team_create team_delete team_plan_approval
+        request_shutdown send_message structured_output monitor notebook_edit
+        tool_call tool_search read_mcp_resource advisor enter_worktree exit_worktree
+        workflow artifact record_artifact record_source report_findings get_goal
+        update_goal omni_downsample_image omni_downscale_video omni_downsample_audio
+        omni_extract_keyframes omni_extract_audio omni_clip_video omni_convert_image
+        omni_transcribe_audio omni_clip_image omni_clip_audio omni_caption_image
+        omni_caption_audio omni_ocr_image omni_understand_video_segments
+        omni_recall_media_memory propose_goal display_image
+    """
+
+    def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
+        require_version(prefix, args.cwd, "qwen", self.version)
+        command = prefix + ["--safe-mode", "--chat-recording", "--approval-mode", "default", "--input-format", "text",
+                            "--output-format", "stream-json", "--exclude-tools", ",".join(self.excluded.split())]
+        if info.get("native_session_id"):
+            command += ["--resume", info["native_session_id"]]
+        if getattr(args, "model", None):
+            command += ["--model", args.model]
+        return command, {**os.environ, "QWEN_RUNTIME_DIR": str(directory / "qwen-runtime")}
+
+    def parse(self, output_path, answer_path, directory, info):
+        rows = records(output_path)
+        terminals = [row for row in rows if row.get("type") == "result"]
+        if (len(terminals) != 1 or any(row.get("type") == "error"
+                or row.get("subtype") == "session_recording_degraded" for row in rows)):
+            chat.fail(f"Qwen reported an incomplete or unrecorded response; see {output_path}")
+        final = terminals[0]
+        session = session_ids([final], "session_id")
+        if (final.get("subtype") != "success" or final.get("is_error") is not False
+                or not isinstance(final.get("result"), str)):
+            chat.fail(f"Qwen did not complete a successful response; see {output_path}")
+        starts = [row for row in rows if row.get("type") == "system" and row.get("subtype") == "session_start"]
+        if starts and session_ids(starts, "session_id") != session:
+            chat.fail("Qwen reported inconsistent session IDs")
+        return response(final["result"]), session
+
+
 REGISTRY = {
     "claude": Legacy("claude", ("@anthropic-ai/claude-code/cli.js",)),
     "codex": Legacy("codex", ("@openai/codex/bin/codex.js",)),
     "pi": Pi(),
     "opencode": OpenCode(),
+    "dsh": DeepSeek(),
+    "qwen": Qwen(),
 }
 BACKENDS = tuple(REGISTRY)
 

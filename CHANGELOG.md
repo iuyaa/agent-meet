@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.0 — DeepSeek Harness and Qwen Code
+
+- Add official headless DSH and Qwen Code adapters for meetings and read-only assignments, with independent native sessions and validated continuation across processes.
+- Allow an individual DSH read-only task to search and fetch public web sources. Store the permission on the assignment and disable web tools when the role returns to the discussion.
+- Add installation and version guidance in Chinese and English.
+
 ## 0.13.0 — In-meeting invitations and assignments
 
 - Invite roles during the current round, with a host brief and selected evidence. Promote a managed consultation in place while preserving the room, event IDs and original peer session.

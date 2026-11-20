@@ -10,6 +10,8 @@ Do not start another copy of the host to run the discussion.
 | Claude Code | Codex | `--main claude --backend codex` |
 | pi | OpenCode | `--main pi --backend opencode` |
 | OpenCode | pi | `--main opencode --backend pi` |
+| Codex | DeepSeek Harness | `--main codex --backend dsh` |
+| Claude Code | Qwen Code | `--main claude --backend qwen` |
 | Claude Code | another Claude | `--main claude --backend claude` (reviewer defaults to `claude-peer`) |
 
 These are examples, not restricted pairings. Any host with file/command tools and
@@ -58,7 +60,7 @@ when discovery is unavailable. Reading a skill cannot add file/command capabilit
 to a host that does not provide them.
 
 Invited agents need configured local CLIs on PATH (`claude`, `codex`, `pi`,
-`opencode`), or a role/consult `--cli` executable path. No shell command strings
+`opencode`, `dsh`, `qwen`), or a role/consult `--cli` executable path. No shell command strings
 or extra argument injection are supported. Windows Claude/Codex npm wrappers
 resolve their Node entry point; pi supports the original `@mariozechner` package
 and the newer `@earendil-works` bundled entry. OpenCode requires its native platform
@@ -73,6 +75,27 @@ The skill neither installs models nor changes login settings.
 | Codex | `exec`, JSONL + output schema | `exec resume ID` | Read-only sandbox; no approval bypass |
 | pi | `--print --mode json`, stdin prompt | Explicit `--session` file and its header ID | read/grep/find/ls; extensions, skills and templates disabled; built-in MCP disabled when supported |
 | OpenCode | `run --format json`, stdin prompt | `--session ID` | Dedicated `agent-meet` agent with deny-by-default permissions; read/glob/grep/list allowed |
+| DeepSeek Harness | Official `headless --json`, stdin prompt | `--session-id ID` | Read-only preset and file inspection. An individual web task can enable public search and fetch |
+| Qwen Code | `--output-format stream-json`, stdin prompt | `--resume ID` | Safe mode with the supported release's non-read built-ins excluded |
+
+DSH targets the official `@deepseek-ai/dsh@0.2.2-rc.5` and requires Node.js ≥24.9.
+It uses a role-local `DSH_HOME` under `ROOM.peers/IDENTITY/dsh-home` to retain
+its native sessions and control provider and permission configuration. Supply
+`DEEPSEEK_API_KEY` through the host environment or the project's `.env` as
+supported by upstream. DSH uses its `deepseek-official` provider. `--model` can
+select a model supported by that provider. The per-call patch disables shell,
+writes, delegation and interactive tools. A read-only task can opt in to public
+web tools with `meeting.py assign --web-search`.
+
+Qwen Code targets `@qwen-code/qwen-code@0.28.0` and requires Node.js ≥22.
+Use a configured Qwen provider or its supported environment credentials. Native
+recording is enabled and stored under `ROOM.peers/IDENTITY/qwen-runtime` while
+the existing provider configuration remains available. Keep these directories
+with the SQLite room. Windows npm wrappers for both backends resolve to their
+Node entry points.
+
+Each call checks the installed version against a supported release so changes
+to upstream tool names or permission flags cannot silently change behavior.
 
 Pi here means the **pi-mono coding agent**, now maintained at earendil-works/pi.
 The adapter uses JSON session headers and completed assistant messages; it does
@@ -127,6 +150,8 @@ Source references:
 - [pi JSON mode](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/json.md)
 - [OpenCode 1.x run](https://github.com/anomalyco/opencode/blob/v1.2.27/packages/opencode/src/cli/cmd/run.ts)
 - [OpenCode 2.x run](https://github.com/anomalyco/opencode/blob/dev/packages/cli/src/run/run.ts)
+- [DeepSeek Harness headless](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.5/packages/bundle/headless/README.zh.md)
+- [Qwen Code headless](https://github.com/QwenLM/qwen-code/blob/v0.28.0/docs/users/features/headless.md)
 
 New consult/group rooms default to `PROJECT/.agent-meet/UNIQUE_DISCUSSION/discussion.sqlite`
 when init omits `--room`. For skill workflows, use `storage.py prepare` first and

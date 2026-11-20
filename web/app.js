@@ -1,6 +1,6 @@
 'use strict';
 function engineName(backend) {
-  return { codex: 'Codex', claude: 'Claude', pi: 'pi', opencode: 'OpenCode' }[backend] || backend;
+  return { codex: 'Codex', claude: 'Claude', pi: 'pi', opencode: 'OpenCode', dsh: 'DeepSeek Harness', qwen: 'Qwen Code' }[backend] || backend;
 }
 
 const $ = (id) => document.getElementById(id);
@@ -409,7 +409,8 @@ function meetingEvent(event, roles) {
   content.append(node('div', labels[event.kind] + ' · ' + title, 'proposal-label'));
   if (body.spec) {
     const assignee = roles.find((role) => role.id === body.assignee)?.title || body.assignee;
-    content.append(node('p', assignee + ' · ' + (body.type === 'readonly' ? '只读任务' : '实现任务')),
+    const taskType = body.web_search ? '公开网页查证' : body.type === 'readonly' ? '只读任务' : '实现任务';
+    content.append(node('p', assignee + ' · ' + taskType),
       node('strong', body.spec.title), markdown(body.spec.instructions), markdown(body.spec.context));
     list(content, '约束', body.spec.constraints);
     list(content, '验收标准', body.spec.acceptance_criteria);
@@ -842,7 +843,7 @@ function render(data) {
                         : '待发言';
         row.append(
           node('strong', role.title),
-          node('span', (role.backend === 'existing' ? '当前会话' : role.backend) + ' · ' + label),
+          node('span', (role.backend === 'existing' ? '当前会话' : engineName(role.backend)) + ' · ' + label),
           node('p', role.focus),
         );
         return row;
