@@ -223,7 +223,7 @@ OpenCode 使用独立讨论 agent 的只读工具权限，2.x 每次调用使用
 
 ### 会中查证公开资料
 
-在主持会话里交代“请 DSH 和 Qwen Code 讨论这个问题，遇到需要外部证据的地方，让 DSH 查公开文档，给出链接再继续”。主持人可以把查证记录成一项只读任务，用 `--web-search` 为该任务启用搜索和网页读取。引用出处会随结果回到原会议，后续讨论恢复该角色原会话。[查证任务命令](../references/live-meeting.md#verify-public-web-sources)
+在主持会话里交代“请 Hermes 和 Qoder 讨论这个问题，遇到需要外部证据的地方，用已有的网络工具查公开文档，给出链接再继续”。主持人可以把查证记录成一项只读任务。能查到的来源随结果回到原会议，缺少工具或访问权限时记录证据缺口，继续用手头材料讨论。网络搜索和 SSH 沿用 agent 自己的工具和权限。DSH 的任务级 `--web-search` 选项仍可使用。[查证任务命令](../references/live-meeting.md#verify-public-web-sources)
 
 ## 实现、测试与代码审查任务
 

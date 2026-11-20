@@ -235,7 +235,7 @@ See [the command and task file examples](../references/live-meeting.md).
 
 ### Verify public sources during a meeting
 
-You can ask the host to invite DSH and Qwen Code, then have DSH check public documentation if a claim needs outside evidence. The host can add `--web-search` to a read-only task to enable search and fetch for that assignment. Source links return with the result, and the role can resume its meeting session. [Web research task commands](../references/live-meeting.md#verify-public-web-sources)
+Ask the host to invite Hermes and Qoder and have them check public documentation with their existing tools when outside evidence is needed. The host can record the verification as a read-only task. Source links return with the result. If access or a tool is unavailable, record the gap and proceed with the evidence at hand. Search and SSH use the agent's own tools and permissions. DSH still supports its per-task `--web-search` option. [Web research task commands](../references/live-meeting.md#verify-public-web-sources)
 
 ## Implementation, test and code-review tasks
 

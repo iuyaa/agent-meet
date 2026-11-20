@@ -57,8 +57,14 @@ mode_path = Path('mode')
 mode = mode_path.read_text() if mode_path.exists() else 'ok'
 args = sys.argv[1:]
 if args == ['--version']:
-    print('0.0.0' if mode == 'unsupported' else {'dsh': '0.2.2-rc.5', 'qwen': '0.28.0'}[backend])
+    print('0.0.0' if mode == 'unsupported' else {
+        'dsh': '0.2.2-rc.5', 'qwen': '0.28.0', 'qoder': '1.1.93',
+        'hermes': 'Hermes Agent v0.21.5 (2026.9.24)'
+    }[backend])
     sys.exit(0)
+if mode == 'delay':
+    import time
+    time.sleep(30)
 
 prompt = sys.stdin.read()
 context = json.loads(prompt.split('Discussion data:\n', 1)[1])
@@ -95,13 +101,40 @@ if backend == 'dsh':
     if mode != 'truncated':
         print(json.dumps({'type': 'final', 'sessionId': 'different-id' if mode == 'mismatched-final' else actual,
                           'reason': {'kind': 'error' if mode == 'terminal-failure' else 'completed'}, 'text': answer}))
-else:
+elif backend == 'qwen':
     print(json.dumps({'type': 'system', 'subtype': 'session_start', 'session_id': actual}))
     if mode == 'error':
         print(json.dumps({'type': 'system', 'subtype': 'session_recording_degraded'}))
     if mode != 'truncated':
         print(json.dumps({'type': 'result', 'subtype': 'success', 'session_id': actual, 'result': answer,
                           'is_error': mode == 'terminal-failure'}))
+else:
+    init = {'type': 'system', 'subtype': 'init', 'session_id': actual}
+    final = {'type': 'result', 'session_id': 'different-id' if mode == 'mismatched-final' else actual}
+    if backend == 'qoder':
+        names = args[args.index('--tools') + 1:args.index('--permission-mode')]
+        assert names == ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch']
+        assert args[args.index('--permission-mode') + 1] == 'dont_ask'
+        assert '--strict-mcp-config' in args
+        assert json.loads(args[args.index('--mcp-config') + 1]) == {'mcpServers': {}}
+        assert json.loads(args[args.index('--settings') + 1])['disableAllHooks']
+        if mode == 'unexpected-tool':
+            names.append('Bash')
+        init.update(permissionMode='dontAsk', mcp_servers=[], tools=names)
+        final.update(subtype='success', result=answer, is_error=mode == 'terminal-failure',
+                     terminal_reason='blocking_limit' if mode == 'error' else 'completed')
+    else:
+        assert args[:8] == ['chat', '--query-file', '-', '--format', 'stream-json',
+                            '--toolsets', 'web', '--ignore-rules']
+        print('Hermes startup warning')
+        final.update(text=answer, exit_code=1 if mode == 'terminal-failure' else 0)
+    print(json.dumps(init))
+    if backend == 'hermes' and mode == 'unexpected-tool':
+        print(json.dumps({'type': 'tool_use', 'name': 'write_file'}))
+    if backend == 'hermes' and mode == 'error':
+        print(json.dumps({'type': 'error', 'message': 'denied'}))
+    if mode != 'truncated':
+        print(json.dumps(final))
 '''
 
 
@@ -116,7 +149,8 @@ class AdapterTests(unittest.TestCase):
             'constraints':[],'decisions':[],'rejected_options':[],'code_references':[],'unknowns':[]}))
         self.clis = {}
         for name, body in [('claude', FAKE_CLAUDE), ('codex', FAKE_CODEX), ('pi', FAKE_AGENT), ('opencode', FAKE_AGENT),
-                           ('dsh', FAKE_HEADLESS), ('qwen', FAKE_HEADLESS)]:
+                           ('dsh', FAKE_HEADLESS), ('qwen', FAKE_HEADLESS),
+                           ('hermes', FAKE_HEADLESS), ('qoder', FAKE_HEADLESS)]:
             path=self.root / ('fake '+name);path.write_text(body);path.chmod(0o755);self.clis[name]=path
 
     def tearDown(self):
@@ -261,6 +295,42 @@ class AdapterTests(unittest.TestCase):
                     self.reply(ok=False)
                     self.assertEqual(self.command('consult.py','status')['status']['message_count'],1)
 
+    def test_hermes_and_qoder_reuse_native_sessions_for_meeting_assignments(self):
+        for backend, host in (('hermes', 'qoder'), ('qoder', 'hermes')):
+            with self.subTest(backend=backend):
+                self.room = self.root / f'{backend}.sqlite'
+                self.initialize(backend, host, '--model', 'custom-test-model')
+                native = self.reply()['model']['native_session_id']
+                self.send(host)
+                self.assertEqual(self.reply('second')['model']['native_session_id'], native)
+                spec = self.root / 'native-web-task.json'
+                spec.write_text(json.dumps({'title': 'Check source', 'instructions': 'Verify provided evidence',
+                    'context': 'Use public sources if available', 'constraints': [],
+                    'acceptance_criteria': ['Use a citation']}))
+                self.command('meeting.py', 'assign', '--as', host, '--to', backend, '--type', 'readonly',
+                             '--task-id', 'verify', '--request-id', 'assign', '--file', spec)
+                self.command('meeting.py', 'run', '--as', host, '--task-id', 'verify', '--request-id', 'run')
+                calls = self.calls(backend)
+                self.assertEqual([call['session'] for call in calls], [native] * 3)
+                self.assertNotIn('--resume', calls[0]['argv'])
+                for call in calls[1:]:
+                    argv = call['argv']
+                    self.assertEqual(argv[argv.index('--resume') + 1], native)
+                    self.assertEqual(argv[argv.index('--model') + 1], 'custom-test-model')
+                self.assertFalse(peer.paths(self.room, host).exists())
+                self.assertEqual(calls[-1]['context']['task']['title'], 'Check source')
+
+    def test_hermes_and_qoder_reject_errors_or_unexpected_tools(self):
+        for backend in ('hermes', 'qoder'):
+            for mode in ('truncated', 'malformed', 'error', 'terminal-failure', 'unsupported',
+                         'mismatched-final', 'unexpected-tool'):
+                with self.subTest(backend=backend, mode=mode):
+                    self.room = self.root / f'{backend}-{mode}.sqlite'
+                    self.initialize(backend)
+                    (self.root / 'mode').write_text(mode)
+                    self.reply(ok=False)
+                    self.assertEqual(self.command('consult.py', 'status')['status']['message_count'], 1)
+
     def test_invalid_new_engine_outputs_never_become_discussion_messages(self):
         for backend in ('pi','opencode'):
             for mode in ('malformed','length','error','bad-shape'):
@@ -274,7 +344,7 @@ class AdapterTests(unittest.TestCase):
                     self.assertEqual(state['status']['message_count'],1)
 
     def test_different_session_is_refused_on_resume_for_new_engines(self):
-        for backend in ('pi','opencode','dsh','qwen'):
+        for backend in ('pi','opencode','dsh','qwen','hermes','qoder'):
             with self.subTest(backend=backend):
                 self.room=self.root/(backend+'.sqlite');self.initialize(backend);first=self.reply();self.send()
                 (self.root/'mode').write_text('switch')
@@ -302,7 +372,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.reply()['event']['sender'],'claude')
 
     def test_new_adapters_use_shared_timeout_and_record_no_reply(self):
-        for backend in ('pi','opencode'):
+        for backend in ('pi','opencode','hermes','qoder'):
             with self.subTest(backend=backend):
                 self.room=self.root/(backend+'-timeout.sqlite');self.initialize(backend)
                 (self.root/'mode').write_text('delay')
@@ -332,3 +402,12 @@ class AdapterTests(unittest.TestCase):
                 with mock.patch.object(peer.shutil,'which',side_effect=[str(wrapper),'/path/node.exe']):
                     self.assertEqual(peer.cli_prefix('pi','pi'),['/path/node.exe',str(script)])
                 script.unlink()
+
+    def test_windows_qoder_npm_wrapper_resolves_without_shell(self):
+        wrapper = self.root / 'qoder.cmd'
+        wrapper.write_text('do not execute')
+        script = self.root / 'node_modules' / adapters.Qoder.npm_entries[0]
+        script.parent.mkdir(parents=True)
+        script.write_text('')
+        with mock.patch.object(peer.shutil, 'which', side_effect=[str(wrapper), '/path/node.exe']):
+            self.assertEqual(peer.cli_prefix('qoder', 'qoder'), ['/path/node.exe', str(script)])

@@ -296,7 +296,10 @@ def run_readonly(args, role, settings, data, refs, feedback, started):
         web_search = data.get("web_search", False)
         web_instruction = ("Use the provided search and fetch tools only for public sources within the task. "
                            "Keep private room data out of queries. Cite source titles and URLs for each claim, "
-                           "and identify what could not be verified. " if web_search else "")
+                           "and identify what could not be verified. " if web_search else
+                           "For public web research within the task, use available native web tools, "
+                           "cite URLs, and leave private room data out of queries. If needed access is "
+                           "unavailable, report the gap and use evidence already supplied. ")
         prompt = ("Complete the host's narrowly scoped task as this existing meeting role. Use only read-only tools. "
                   + web_instruction +
                   "Return one send response with concrete findings and evidence in text, decision none, empty conclusion. "

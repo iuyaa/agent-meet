@@ -1,6 +1,18 @@
 'use strict';
 function engineName(backend) {
-  return { codex: 'Codex', claude: 'Claude', pi: 'pi', opencode: 'OpenCode', dsh: 'DeepSeek Harness', qwen: 'Qwen Code', zcode: 'ZCode' }[backend] || backend;
+  return (
+    {
+      codex: 'Codex',
+      claude: 'Claude',
+      pi: 'pi',
+      opencode: 'OpenCode',
+      dsh: 'DeepSeek Harness',
+      qwen: 'Qwen Code',
+      zcode: 'ZCode',
+      hermes: 'Hermes Agent',
+      qoder: 'Qoder',
+    }[backend] || backend
+  );
 }
 
 const $ = (id) => document.getElementById(id);

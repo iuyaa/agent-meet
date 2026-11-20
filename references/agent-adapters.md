@@ -13,6 +13,8 @@ Do not start another copy of the host to run the discussion.
 | Codex | DeepSeek Harness | `--main codex --backend dsh` |
 | Claude Code | Qwen Code | `--main claude --backend qwen` |
 | Codex | ZCode | `--main codex --backend zcode` |
+| Codex | Hermes Agent | `--main codex --backend hermes` |
+| Hermes Agent | Qoder CLI | `--main hermes --backend qoder` |
 | Claude Code | another Claude | `--main claude --backend claude` (reviewer defaults to `claude-peer`) |
 
 These are examples, not restricted pairings. Any host with file/command tools and
@@ -61,7 +63,7 @@ when discovery is unavailable. Reading a skill cannot add file/command capabilit
 to a host that does not provide them.
 
 Invited agents need configured local CLIs on PATH (`claude`, `codex`, `pi`,
-`opencode`, `dsh`, `qwen`, `zcode`), or a role/consult `--cli` executable path. No shell command strings
+`opencode`, `dsh`, `qwen`, `zcode`, `hermes`, `qoder`), or a role/consult `--cli` executable path. No shell command strings
 or extra argument injection are supported. Windows Claude/Codex npm wrappers
 resolve their Node entry point; pi supports the original `@mariozechner` package
 and the newer `@earendil-works` bundled entry. OpenCode requires its native platform
@@ -79,6 +81,22 @@ The skill neither installs models nor changes login settings.
 | DeepSeek Harness | Official `headless --json`, stdin prompt | `--session-id ID` | Read-only preset and file inspection. An individual web task can enable public search and fetch |
 | Qwen Code | `--output-format stream-json`, stdin prompt | `--resume ID` | Safe mode with the supported release's non-read built-ins excluded |
 | ZCode | Official `app-server --stdio` protocol | `session/resume` with the exact ID | Plan mode with a `Read`, `Glob`, `Grep` tool allowlist |
+| Hermes Agent | `chat --format stream-json`, stdin prompt | `--resume ID` | Supplied evidence and Hermes' native web toolset when available |
+| Qoder CLI | `-p --output-format stream-json`, stdin prompt | `--resume ID` | `Read`, `Glob`, `Grep` plus native `WebSearch`/`WebFetch` when available and permitted |
+
+Hermes targets **0.21.5** (release `v2026.9.24`) with local single-query
+execution. Use the configured `hermes` CLI and its native model identifier
+for `--model`. Hermes groups file reading and editing in the same toolset, so
+include relevant excerpts in the briefing or meeting evidence for repository
+reviews. Existing trusted Hermes profile extensions and hooks operate under the
+user's Hermes configuration. Use a trusted profile for meeting participants.
+
+Qoder targets **1.1.93** with an existing Qoder login. Use `qoder` on PATH or
+set `--cli` to the official `qodercli` executable or npm bundle. Use the
+CLI's model name or custom model ID with `--model`. The adapter restricts
+built-in tools, disables hooks, skills and MCP for the turn, and denies
+unattended permission prompts. Preserve each CLI's native session storage
+alongside the Agent-Meet room when continuing Hermes or Qoder meetings.
 
 ZCode targets the official CLI **0.17.1**, built from ZCode release `v3.18.2`.
 Use `zcode` on PATH, the native

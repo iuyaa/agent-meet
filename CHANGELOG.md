@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.0 — Hermes Agent and Qoder CLI
+
+- Add Hermes and Qoder participants for discussions and read-only assignments. Resume each role's exact native session and accept only completed replies.
+- Use configured native web tools when available. Hermes can assess evidence supplied in the meeting, and Qoder also has repository read and search tools.
+- Include both backends in the local viewer and document their CLI configuration in Chinese and English.
+
 ## 0.15.0 — ZCode meeting participants
 
 - Add the official ZCode app-server adapter for discussions and read-only assignments. Send prompts over stdio and retain the role's native session across processes.

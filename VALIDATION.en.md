@@ -4,6 +4,12 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
+## v0.16.0 Hermes Agent and Qoder CLI
+
+- Ran official Hermes CLI `0.21.5` with a local model fixture. Resumed the same native session for a follow-up, an in-place promotion to a group meeting, a read-only assignment, and the next discussion round. Inspected the tools sent to the model with native web tools available and disabled.
+- Ran official Qoder CLI `1.1.93` through non-interactive startup and its signed-out failure path. Fixtures using its protocol cover successful replies, exact session recovery, and assignments.
+- Regression coverage includes unexpected tools, unsuccessful terminal events, timeouts, mismatched session IDs, and Windows npm entry point resolution. Live accounts, actual web search services, and native Windows execution remain unverified.
+
 ## v0.15.0 ZCode
 
 - Built official ZCode CLI `0.17.1` from tag `v3.18.2` on Linux and ran it against a local model fixture. Verified that separate processes keep the same native session and history, including a read-only assignment after promoting a consultation in place.

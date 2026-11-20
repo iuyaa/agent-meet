@@ -76,10 +76,12 @@ still applies.
 
 ## Verify public web sources
 
-Choose a DSH role with its DeepSeek API provider configured. Add `--web-search`
-to that role's read-only assignment. Describe the exact claim and what public
-sources would settle it in the task file. Ask for URLs and note any gaps. Keep
-private project references and credentials out of web queries.
+Assign a read-only task to a role with native web access. Describe the claim and
+what public sources would settle it. Ask for URLs and keep private meeting data
+out of queries. If access is unavailable, record the gap and use the evidence
+that is already available. Search and SSH use the agent's existing tools and
+permissions. For the existing DSH task-specific mode, add `--web-search` as
+shown below. Hermes and Qoder use their native web tools when available.
 
 ```bash
 python3 scripts/meeting.py assign --room ROOM --as HOST --task-id verify-docs \
@@ -87,8 +89,7 @@ python3 scripts/meeting.py assign --room ROOM --as HOST --task-id verify-docs \
 python3 scripts/meeting.py run --room ROOM --as HOST --task-id verify-docs --request-id verify-docs-1
 ```
 
-Public search and fetch are available for this assignment, including rework.
-Ordinary discussion and later local-only work have web tools disabled. The
+DSH enables its native web tools for this assignment and its rework. The
 host reviews the returned sources before citing the result. Configure DSH as
 described in [hosts and adapters](agent-adapters.md#backends-sessions-and-boundaries).
 

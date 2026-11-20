@@ -1,6 +1,6 @@
 ---
 name: agent-meet
-description: Check for Agent-Meet updates before use. Discuss across Codex, Claude, pi, OpenCode, DeepSeek Harness, Qwen Code and ZCode from the original host conversation. Invite roles during a meeting, assign read-only work, public web research via DSH, or Claude implementation in an isolated Git worktree. Review results in the same room and resume original native sessions for continuation and rework. Requires Python 3 and configured local role CLIs.
+description: Check for Agent-Meet updates before use. Discuss across Codex, Claude, pi, OpenCode, DeepSeek Harness, Qwen Code, ZCode, Hermes Agent and Qoder from the original host conversation. Invite roles, assign read-only work or Claude implementation in an isolated Git worktree, and review results in the same room. Resume native sessions for continuation and rework. Requires Python 3 and configured local role CLIs.
 ---
 
 # Agent-Meet
@@ -61,9 +61,12 @@ verified results back into the discussion. Use the user's authorized work scope
 when deciding between read-only inspection and implementation. Resolve each task
 before drafting, and cite its relevant results as evidence. Report when an existing
 managed consultation becomes a group room, then use `group.py` for its next reply.
-When the task calls for public web research, assign it to a configured DSH role
-using `--type readonly --web-search`. Ask for source URLs, check sources before
-accepting them as evidence, and keep private meeting information out of queries.
+For verification, use the host's or a role's existing native tools within the
+authorized scope. Ask for source URLs for public web research and keep private
+meeting information out of queries. If the necessary tool or access is unavailable,
+continue with the available evidence and record the gap. Leave search and SSH
+configuration to the agents. A DSH role still supports the task-specific
+`--type readonly --web-search` option.
 
 **For standalone coding, fixing, testing or code-review assignments to Claude**, read
 [task workflow](references/task-workflow.md) FIRST and use `scripts/task.py`.
@@ -91,7 +94,8 @@ configured local CLIs, using their existing accounts. The host needs file and
 foreground command tools, Python 3, and access to this SKILL.md; it needs no extra
 copy of its own CLI. No Golutra or additional Python packages are required.
 Built-in participant backends: `claude`, `codex`, `pi` (pi-mono coding agent),
-`opencode`, `dsh` (DeepSeek Harness), `qwen` (Qwen Code) and `zcode` (Z.ai ZCode). A role's backend is
+`opencode`, `dsh` (DeepSeek Harness), `qwen` (Qwen Code), `zcode` (Z.ai ZCode),
+`hermes` (Nous Research Hermes Agent) and `qoder` (Qoder CLI). A role's backend is
 independent of its title and the host's identity.
 Additional roles still default to Claude unless the user specifies otherwise.
 Read [agent adapters](references/agent-adapters.md) for reverse-host examples,

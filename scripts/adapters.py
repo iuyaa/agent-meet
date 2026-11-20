@@ -86,11 +86,11 @@ class Legacy:
         return result, session
 
 
-def probe(prefix, flag, cwd):
+def probe(prefix, flag, cwd, *, env=None, timeout=10):
     try:
         result = subprocess.run(prefix + [flag], stdin=subprocess.DEVNULL,
                                 capture_output=True, text=True, encoding="utf-8",
-                                timeout=10, cwd=cwd, **processes.launch_options())
+                                timeout=timeout, cwd=cwd, env=env, **processes.launch_options())
     except subprocess.TimeoutExpired:
         chat.fail("agent CLI capability check timed out; inspect its installation")
     if result.returncode:
@@ -114,8 +114,10 @@ def session_ids(rows, key, event_type=None):
     return next(iter(sessions))
 
 
-def records(path):
-    rows = [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
+def records(path, *, plain_diagnostics=False):
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    rows = [json.loads(line) for line in lines if line.strip()
+            and (not plain_diagnostics or line.lstrip().startswith("{"))]
     if not rows or any(not isinstance(row, dict) for row in rows):
         chat.fail(f"invalid CLI JSONL output; see {path}")
     return rows
@@ -298,8 +300,8 @@ class DeepSeek:
         return response(final["text"]), session
 
 
-def require_version(prefix, cwd, name, version):
-    reported = probe(prefix, "--version", cwd).strip()
+def require_version(prefix, cwd, name, version, *, timeout=10):
+    reported = probe(prefix, "--version", cwd, timeout=timeout).strip()
     if reported != version:
         chat.fail(f"{name} adapter requires CLI version {version}; installed version is {reported!r}")
 
@@ -352,6 +354,88 @@ class Qwen:
         if starts and session_ids(starts, "session_id") != session:
             chat.fail("Qwen reported inconsistent session IDs")
         return response(final["result"]), session
+
+
+class Qoder:
+    prompt_schema = True
+    owned_process = True
+    npm_entries = ("@qoder-ai/qodercli/bundle/qodercli.js",)
+    node_scripts = (".js",)
+    version = "1.1.93"
+    tools = ("Read", "Glob", "Grep", "WebSearch", "WebFetch")
+
+    def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
+        require_version(prefix, args.cwd, "Qoder", self.version, timeout=25)
+        command = prefix + ["-p", "--input-format", "text", "--output-format", "stream-json",
+                            "--tools", *self.tools, "--permission-mode", "dont_ask",
+                            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
+                            "--setting-sources", "user", "--settings",
+                            '{"disableAllHooks":true,"skills":{"enabled":false,"loadFromAgentsDirectory":false}}']
+        if info.get("native_session_id"):
+            command += ["--resume", info["native_session_id"]]
+        if getattr(args, "model", None):
+            command += ["--model", args.model]
+        return command, None
+
+    def parse(self, output_path, answer_path, directory, info):
+        rows = records(output_path)
+        final = rows[-1]
+        if (any(row.get("type") in ("result", "error") for row in rows[:-1])
+                or final.get("type") != "result" or final.get("subtype") != "success"
+                or final.get("is_error") is not False or final.get("error_code")
+                or final.get("deferred_tool_use")
+                or final.get("terminal_reason") not in (None, "completed")
+                or not isinstance(final.get("result"), str)):
+            chat.fail(f"Qoder did not complete a successful response; see {output_path}")
+        session = session_ids(rows, "session_id")
+        starts = [row for row in rows if row.get("type") == "system" and row.get("subtype") == "init"]
+        if (len(starts) != 1 or starts[0].get("session_id") != session
+                or starts[0].get("permissionMode") != "dontAsk"
+                or starts[0].get("mcp_servers") != []
+                or not isinstance(names := starts[0].get("tools"), list)
+                or any(name not in self.tools for name in names)):
+            chat.fail(f"Qoder did not report the expected read-only tool configuration; see {output_path}")
+        return response(final["result"]), session
+
+
+class Hermes:
+    prompt_schema = True
+    owned_process = True
+    # This release runs chat locally in the subprocess. Later gateway-backed
+    # releases can keep a turn running when the CLI disconnects.
+    version = "0.21.5"
+
+    def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
+        environment = {**os.environ, "PYTHONIOENCODING": "utf-8", "HERMES_ENABLE_PROJECT_PLUGINS": "0"}
+        reported = probe(prefix, "--version", args.cwd, env=environment)
+        if not re.search(rf"(?m)^Hermes Agent v{re.escape(self.version)}(?:\s|$)", reported):
+            chat.fail(f"Hermes adapter requires the Hermes Agent {self.version} CLI")
+        # Hermes groups file reads and writes together in its file toolset.
+        command = prefix + ["chat", "--query-file", "-", "--format", "stream-json",
+                            "--toolsets", "web", "--ignore-rules"]
+        if info.get("native_session_id"):
+            command += ["--resume", info["native_session_id"]]
+        if getattr(args, "model", None):
+            command += ["--model", args.model]
+        return command, environment
+
+    def parse(self, output_path, answer_path, directory, info):
+        # This CLI prints some native startup warnings to stdout even in
+        # stream-json mode. Keep them in the log, outside the JSONL protocol.
+        rows = records(output_path, plain_diagnostics=True)
+        final = rows[-1]
+        if (any(row.get("type") in ("result", "error") for row in rows[:-1])
+                or final.get("type") != "result" or type(final.get("exit_code")) is not int
+                or final["exit_code"] != 0 or final.get("error") or not isinstance(final.get("text"), str)):
+            chat.fail(f"Hermes did not complete a successful response; see {output_path}")
+        starts = [row for row in rows if row.get("type") == "system" and row.get("subtype") == "init"]
+        if len(starts) != 1 or starts[0].get("session_id") != final.get("session_id"):
+            chat.fail(f"Hermes returned inconsistent native session IDs; see {output_path}")
+        session = session_ids([final], "session_id")
+        if any(row.get("type") == "tool_use" and row.get("name") not in ("web_search", "web_extract")
+               for row in rows):
+            chat.fail(f"Hermes used a tool outside the web toolset; see {output_path}")
+        return response(final["text"]), session
 
 
 class ZCodeConnection:
@@ -520,6 +604,8 @@ REGISTRY = {
     "dsh": DeepSeek(),
     "qwen": Qwen(),
     "zcode": ZCode(),
+    "hermes": Hermes(),
+    "qoder": Qoder(),
 }
 BACKENDS = tuple(REGISTRY)
 

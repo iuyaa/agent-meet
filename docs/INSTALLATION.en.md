@@ -59,6 +59,18 @@ DSH requires Node.js 24.9 or later. Provide `DEEPSEEK_API_KEY` in the host envir
 
 Use the official ZCode CLI `0.17.1` built from the ZCode project tag `v3.18.2`. Configure a model provider and confirm the CLI version with `zcode --version`. When the command is outside PATH, set the role's `cli` field or `--cli` to the absolute path of its executable or `zcode.cjs`. The Node bundle requires Node.js and the adjacent assets produced by its build. [Official CLI build and diagnostics](https://github.com/zai-org/ZCode/blob/v3.18.2/apps/zcode-cli/docs/usage/01-quickstart.md)
 
+## Install a Hermes Agent or Qoder CLI participant
+
+Use official Hermes Agent `0.21.5` (tag `v2026.9.24`). Configure its model and check with `hermes --version`. This adapter can review evidence supplied in the meeting and use configured native web tools. [Hermes release](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.24)
+
+```bash
+npm install -g @qoder-ai/qodercli@1.1.93
+qoder login
+qoder --version
+```
+
+Use the signed-in Qoder CLI as the participant. If a CLI is outside PATH, set the role's `cli` field or pass `--cli` with its path. To select a model, use the name or ID accepted by that CLI. [Qoder CLI reference](https://docs.qoder.com/cli/cli-reference)
+
 ## Automatic updates
 
 Starting with v0.12, the skill asks the host to run a version preflight before
