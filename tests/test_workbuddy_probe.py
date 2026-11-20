@@ -251,6 +251,30 @@ class WorkBuddyProbeTests(unittest.TestCase):
             with self.assertRaisesRegex(probe.ProbeError, "multiple_desktop_gateways"):
                 probe.discover(root)
 
+    def test_discovery_reports_rejection_counts_and_supports_suffixed_host_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sessions = root / "sessions"
+            sessions.mkdir()
+            now = time.time() * 1000
+            host_cwd = r"F:\WorkBuddy\cache\workbuddy-host-cli-a1b2"
+            fixture = {"endpoint": "http://127.0.0.1:4321", "cwd": host_cwd,
+                       "lastHeartbeat": now, "sessionToken": "private-fixture-value"}
+            (sessions / "stale.json").write_text(json.dumps({**fixture, "lastHeartbeat": now - 60000}))
+            (sessions / "worker.json").write_text(json.dumps({**fixture, "cwd": "different-cwd"}))
+            (sessions / "remote.json").write_text(json.dumps({**fixture, "endpoint": "https://example.com:443"}))
+            (sessions / "bad.json").write_text("malformed")
+            diagnostics = []
+            with patch.dict(os.environ, {"WORKBUDDY_HOME": str(root)}):
+                with self.assertRaisesRegex(probe.ProbeError, "desktop_gateway_not_found"):
+                    probe.discover(diagnostics=diagnostics)
+            self.assertEqual(diagnostics, [{"profile": "configured", "sessions_dir": True,
+                "json_files": 4, "unreadable": 1, "not_desktop_host": 1,
+                "stale_or_missing_heartbeat": 1, "invalid_loopback_endpoint": 1,
+                "desktop_candidates": 0}])
+            (sessions / "ready.json").write_text(json.dumps(fixture))
+            self.assertEqual(probe.discover(root), ("127.0.0.1", 4321))
+
 
 if __name__ == "__main__":
     unittest.main()

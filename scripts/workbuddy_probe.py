@@ -35,30 +35,58 @@ def gateway_endpoint(url):
     raise ProbeError("gateway_must_be_loopback_http_with_port")
 
 
-def discover(home=None):
-    roots = [Path(home).expanduser()] if home else [Path.home() / name for name in (".workbuddy", ".workbuddy-ai")]
+def desktop_host_cwd(cwd):
+    if not isinstance(cwd, str):
+        return False
+    parts = cwd.lower().replace("\\", "/").split("/")
+    return any(part == "workbuddy-host-cli" or part.startswith("workbuddy-host-cli-") for part in parts)
+
+
+def discover(home=None, diagnostics=None):
+    home = home or os.environ.get("WORKBUDDY_HOME")
+    roots = [("configured", Path(home).expanduser())] if home else [
+        (name, Path.home() / name) for name in (".workbuddy", ".workbuddy-ai")]
     candidates = set()
-    for root in roots:
+    now = time.time() * 1000
+    for label, root in roots:
         sessions = root / "sessions"
+        counts = {"profile": label, "sessions_dir": sessions.is_dir(), "json_files": 0,
+                  "unreadable": 0, "not_desktop_host": 0, "stale_or_missing_heartbeat": 0,
+                  "invalid_loopback_endpoint": 0, "desktop_candidates": 0}
+        if diagnostics is not None:
+            diagnostics.append(counts)
         for file in sessions.glob("*.json"):
+            counts["json_files"] += 1
             try:
                 if not file.is_file() or file.resolve().parent != sessions.resolve():
-                    continue
+                    raise ValueError
                 with file.open("rb") as handle:
                     raw = handle.read(65537)
                 if len(raw) > 65536:
-                    continue
+                    raise ValueError
                 data = json.loads(raw)
                 if not isinstance(data, dict):
-                    continue
-                if not 0 <= time.time() * 1000 - data["lastHeartbeat"] <= 30000:
-                    continue
-                # Only the desktop host, never a worker attached to an existing task.
-                if Path(data.get("cwd", "")).name.lower() != "workbuddy-host-cli":
-                    continue
-                candidates.add(gateway_endpoint(data["endpoint"]))
-            except (OSError, ValueError, KeyError, TypeError, ProbeError):
+                    raise ValueError
+            except (OSError, ValueError):
+                counts["unreadable"] += 1
                 continue
+            # Only the desktop host, never a worker attached to an existing task.
+            if not desktop_host_cwd(data.get("cwd")):
+                counts["not_desktop_host"] += 1
+                continue
+            heartbeat = data.get("lastHeartbeat")
+            if type(heartbeat) not in (int, float) or not -5000 <= now - heartbeat <= 30000:
+                counts["stale_or_missing_heartbeat"] += 1
+                continue
+            endpoint = data.get("endpoint")
+            try:
+                if not isinstance(endpoint, str):
+                    raise ProbeError("missing_endpoint")
+                candidates.add(gateway_endpoint(endpoint))
+            except ProbeError:
+                counts["invalid_loopback_endpoint"] += 1
+                continue
+            counts["desktop_candidates"] += 1
     if len(candidates) != 1:
         raise ProbeError("desktop_gateway_not_found" if not candidates else "multiple_desktop_gateways")
     return candidates.pop()
@@ -334,15 +362,19 @@ def main():
     parser.add_argument("--verify", action="store_true", help="send 3 short prompts to test isolation and same-session reconnect")
     parser.add_argument("--timeout", type=int, default=90, choices=range(1, 181), metavar="SECONDS")
     args = parser.parse_args()
+    diagnostics = []
     try:
-        endpoint = gateway_endpoint(args.gateway) if args.gateway else discover(args.workbuddy_home)
+        endpoint = gateway_endpoint(args.gateway) if args.gateway else discover(args.workbuddy_home, diagnostics)
         with Gateway(endpoint, min(args.timeout, 15)) as link:
             print(json.dumps({"step": "desktop_gateway", "ok": True, "protocol": link.init["protocolVersion"]}), flush=True)
         if args.verify:
             verify(endpoint, args.timeout)
     except (ProbeError, OSError, KeyboardInterrupt) as exc:
         reason = str(exc) if isinstance(exc, ProbeError) else "cancelled" if isinstance(exc, KeyboardInterrupt) else "local_io_error"
-        print(json.dumps({"ok": False, "error": reason}), flush=True)
+        result = {"ok": False, "error": reason}
+        if reason in ("desktop_gateway_not_found", "multiple_desktop_gateways"):
+            result["discovery"] = diagnostics
+        print(json.dumps(result), flush=True)
         return 1
     return 0
 
