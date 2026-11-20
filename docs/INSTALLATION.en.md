@@ -55,6 +55,10 @@ npm install -g @qwen-code/qwen-code@0.28.0
 
 DSH requires Node.js 24.9 or later. Provide `DEEPSEEK_API_KEY` in the host environment or a project `.env` supported by DSH. Qwen Code requires Node.js 22 or later and a configured provider. Verify the installed version with `dsh --version` or `qwen --version`. [CLI and session details](../references/agent-adapters.md)
 
+## Install a ZCode participant
+
+Use the official ZCode CLI `0.17.1` built from the ZCode project tag `v3.18.2`. Configure a model provider and confirm the CLI version with `zcode --version`. When the command is outside PATH, set the role's `cli` field or `--cli` to the absolute path of its executable or `zcode.cjs`. The Node bundle requires Node.js and the adjacent assets produced by its build. [Official CLI build and diagnostics](https://github.com/zai-org/ZCode/blob/v3.18.2/apps/zcode-cli/docs/usage/01-quickstart.md)
+
 ## Automatic updates
 
 Starting with v0.12, the skill asks the host to run a version preflight before

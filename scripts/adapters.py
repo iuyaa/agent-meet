@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import uuid
 
 import chat
 import processes
@@ -353,6 +354,164 @@ class Qwen:
         return response(final["result"]), session
 
 
+class ZCodeConnection:
+    """One stdio connection and one correlated meeting turn."""
+
+    def __init__(self, process, log):
+        self.process = process
+        self.log = log
+        self.request_id = 0
+        self.session = None
+        self.input_id = None
+        self.turn_id = None
+        self.terminal = None
+
+    def send(self, message):
+        self.process.stdin.write((json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8"))
+        self.process.stdin.flush()
+
+    def receive(self):
+        limit = 8 * 1024 * 1024
+        raw = self.process.stdout.readline(limit + 1)
+        if not raw:
+            chat.fail("ZCode closed its protocol before finishing; see the CLI logs")
+        self.log.write(raw)
+        self.log.flush()
+        if len(raw) > limit or not raw.endswith(b"\n"):
+            chat.fail("ZCode returned an oversized or incomplete protocol message")
+        row = json.loads(raw)
+        if not isinstance(row, dict):
+            chat.fail("ZCode returned an invalid protocol message")
+        if "method" in row and "id" in row:
+            if row["method"] != "session/requestRuntimePreferences":
+                chat.fail("ZCode requested an interactive action in a read-only meeting turn")
+            self.send({"id": row["id"], "result": {
+                "nativeSearchEnhancementsEnabled": False, "toolSearchMode": "off", "memoryEnabled": False,
+                "subagentRuntimeConfigEnabled": False, "appControlEnabled": False,
+                "askUserQuestionAutoResolutionEnabled": False,
+            }})
+        event = row.get("params")
+        if (self.input_id and row.get("method") == "session/event"
+                and isinstance(event, dict) and event.get("sessionId") == self.session):
+            self.on_event(event)
+        return row
+
+    def on_event(self, event):
+        kind, payload = event.get("type"), event.get("payload")
+        if kind in ("permission.requested", "userInput.requested", "session.closed"):
+            chat.fail("ZCode could not complete this read-only meeting turn")
+        if not isinstance(payload, dict):
+            return
+        same_input = payload.get("inputId") == self.input_id
+        if kind == "turn.started" and same_input:
+            self.turn_id = event.get("turnId")
+        if kind not in ("turn.completed", "turn.failed"):
+            return
+        same_turn = self.turn_id and event.get("turnId") == self.turn_id
+        if same_input or (payload.get("inputId") is None and same_turn):
+            if kind != "turn.completed" or payload.get("resultType") != "success":
+                chat.fail("ZCode reported an unsuccessful meeting turn; see the CLI logs")
+            if self.terminal is not None or not isinstance(payload.get("response"), str):
+                chat.fail("ZCode returned an invalid terminal response")
+            self.terminal = payload["response"]
+
+    def request(self, method, params):
+        self.request_id += 1
+        self.send({"id": self.request_id, "method": method, "params": params})
+        while True:
+            row = self.receive()
+            if row.get("id") == self.request_id:
+                if "error" in row or not isinstance(row.get("result"), dict):
+                    chat.fail(f"ZCode {method} failed; see the CLI logs")
+                return row["result"]
+
+
+class ZCode:
+    prompt_schema = True
+    owned_process = True
+    node_scripts = (".cjs", ".mjs")
+    npm_entries = ()
+    version = "0.17.1"
+
+    def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
+        require_version(prefix, args.cwd, "ZCode", self.version)
+        storage = directory / "zcode-runtime"
+        storage.mkdir(exist_ok=True)
+        environment = {**os.environ, "ZCODE_STORAGE_DIR": str(storage),
+                       "ZCODE_SESSION_DB_PATH": str(storage / "sessions.sqlite"),
+                       "ZCODE_LOG_DIR": str(storage / "logs")}
+        return prefix + ["app-server", "--stdio", "--cwd", args.cwd], environment
+
+    def exchange(self, args, process, source, output, info):
+        connection = ZCodeConnection(process, output)
+        expected = info.get("native_session_id")
+        params = {"workspace": {"workspacePath": args.cwd, "workspaceKey": args.cwd},
+                  "toolAllowlist": ["Read", "Glob", "Grep"]}
+        model = getattr(args, "model", None)
+        selection = None
+        if model:
+            provider, slash, picker_value = model.partition("/")
+            model_id, separator, reasoning = picker_value.partition("$")
+            if not slash or not provider.strip() or not model_id.strip() or (separator and not reasoning.strip()):
+                chat.fail("ZCode model must use providerId/modelId with an optional $reasoningLevel")
+            selection = {"providerId": provider, "modelId": model_id}
+            if separator:
+                selection["options"] = {"reasoningLevel": reasoning}
+        if expected:
+            params["sessionId"] = expected
+            snapshot = connection.request("session/resume", params)
+        else:
+            params.update(mode="plan", persistence="immediate", titleGenerationEnabled=False)
+            if selection and "options" in selection:
+                params["model"] = selection
+            snapshot = connection.request("session/create", params)
+        session = snapshot.get("session")
+        if not isinstance(session, dict):
+            chat.fail("ZCode returned an invalid session snapshot")
+        session_id = session_ids([session], "sessionId")
+        if expected and session_id != expected:
+            chat.fail("ZCode resumed a different native session")
+        connection.session = session_id
+        if selection and not expected:
+            if "options" not in selection:
+                available = snapshot.get("settings", {}).get("model", {}).get("available", [])
+                candidate = next((item for item in available if item.get("ref") == selection), None)
+                default = (candidate or {}).get("reasoning", {}).get("defaultLevel")
+                if not isinstance(default, str) or not default:
+                    chat.fail("ZCode model selection needs a supported $reasoningLevel")
+                selection["options"] = {"reasoningLevel": default}
+            # Creation's legacy model setter flattens options. Use the typed
+            # setter so the selected reasoning level is persisted too.
+            connection.request("session/setModel", {"sessionId": session_id, "model": selection,
+                               "persistAsWorkspaceLastUsed": False})
+        # ZCode 0.17.1 represents Plan as a separate flag. The legacy setter
+        # enables it while the returned snapshot still shows the base mode.
+        snapshot = connection.request("session/setMode", {"sessionId": session_id, "mode": "plan"})
+        session = snapshot.get("session")
+        if (not isinstance(session, dict) or session.get("sessionId") != session_id
+                or session.get("mode") not in ("build", "plan")):
+            chat.fail("ZCode did not establish a read-only plan session")
+        subscription = connection.request("session/subscribe", {"sessionId": session_id,
+                                          "deliveryKind": "web-remote-replayable"})
+        if subscription.get("sessionId") != session_id:
+            chat.fail("ZCode subscribed to a different native session")
+        connection.input_id = str(uuid.uuid4())
+        sent = connection.request("session/send", {"sessionId": session_id, "inputId": connection.input_id,
+                                    "content": source.read().decode("utf-8")})
+        if sent.get("accepted") is not True or sent.get("sessionId") != session_id:
+            chat.fail("ZCode did not accept the input for this session")
+        while connection.terminal is None:
+            connection.receive()
+        result = response(connection.terminal)
+        connection.input_id = None
+        if connection.request("session/close", {"sessionId": session_id}).get("closed") is not True:
+            chat.fail("ZCode did not release its session after the turn")
+        process.stdin.close()
+        while chunk := process.stdout.read(65536):
+            output.write(chunk)
+        return result, session_id
+
+
 REGISTRY = {
     "claude": Legacy("claude", ("@anthropic-ai/claude-code/cli.js",)),
     "codex": Legacy("codex", ("@openai/codex/bin/codex.js",)),
@@ -360,6 +519,7 @@ REGISTRY = {
     "opencode": OpenCode(),
     "dsh": DeepSeek(),
     "qwen": Qwen(),
+    "zcode": ZCode(),
 }
 BACKENDS = tuple(REGISTRY)
 

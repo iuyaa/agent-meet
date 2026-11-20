@@ -4,6 +4,12 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
+## v0.15.0 ZCode
+
+- Built official ZCode CLI `0.17.1` from tag `v3.18.2` on Linux and ran it against a local model fixture. Verified that separate processes keep the same native session and history, including a read-only assignment after promoting a consultation in place.
+- Model requests exposed `Read`, `Glob`, and `Grep`. The fixture successfully read a file marker, then attempted a `Write` that created no file. Explicit model and reasoning level selection were exercised.
+- Regressions cover stdio transmission of a prompt longer than the Windows command-line limit, changed or missing session IDs, early exits, timeouts, interactive requests, and unsuccessful terminal events. The group browser flow passed. A live account and native Windows execution remain unverified.
+
 ## v0.14.0 DSH and Qwen Code
 
 - Official DSH `0.2.2-rc.5` and Qwen Code `0.28.0` ran against a local model fixture. Separate processes retained the native session and its history, including read-only work after promoting a consultation to a group meeting.

@@ -6,7 +6,7 @@ Bring different AI agents into a discussion from your current conversation.
 
 When you need a second opinion or several roles to examine a problem, ask your current agent to start a discussion.
 Meet calls the invited agents, records the exchange, and lets the original host draw conclusions using the context already in your conversation.
-It supports **Codex, Claude Code, pi, OpenCode, DeepSeek Harness (DSH), and Qwen Code**.
+It supports **Codex, Claude Code, pi, OpenCode, DeepSeek Harness (DSH), Qwen Code, and ZCode**.
 
 ```text
 $agent-meet Ask Claude to review this proposal, focusing on boundaries and failure paths.

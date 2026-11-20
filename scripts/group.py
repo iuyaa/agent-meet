@@ -7,7 +7,6 @@ import hashlib
 import json
 import math
 import re
-import shutil
 import sqlite3
 import sys
 import time
@@ -177,7 +176,7 @@ def validate_role(role, names):
         chat.fail("role backend must be one of: " + ", ".join(peer.adapters.BACKENDS))
     role["cli"] = chat.nonempty(role.get("cli", role["backend"]), "cli")
     peer.cli_prefix(role["cli"], role["backend"])
-    role["cli"] = str(Path(shutil.which(role["cli"])).resolve())
+    role["cli"] = str(peer.cli_path(role["cli"], role["backend"]))
     if "model" in role:
         role["model"] = chat.nonempty(role["model"], "model")
     return role

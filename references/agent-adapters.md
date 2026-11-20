@@ -12,6 +12,7 @@ Do not start another copy of the host to run the discussion.
 | OpenCode | pi | `--main opencode --backend pi` |
 | Codex | DeepSeek Harness | `--main codex --backend dsh` |
 | Claude Code | Qwen Code | `--main claude --backend qwen` |
+| Codex | ZCode | `--main codex --backend zcode` |
 | Claude Code | another Claude | `--main claude --backend claude` (reviewer defaults to `claude-peer`) |
 
 These are examples, not restricted pairings. Any host with file/command tools and
@@ -60,7 +61,7 @@ when discovery is unavailable. Reading a skill cannot add file/command capabilit
 to a host that does not provide them.
 
 Invited agents need configured local CLIs on PATH (`claude`, `codex`, `pi`,
-`opencode`, `dsh`, `qwen`), or a role/consult `--cli` executable path. No shell command strings
+`opencode`, `dsh`, `qwen`, `zcode`), or a role/consult `--cli` executable path. No shell command strings
 or extra argument injection are supported. Windows Claude/Codex npm wrappers
 resolve their Node entry point; pi supports the original `@mariozechner` package
 and the newer `@earendil-works` bundled entry. OpenCode requires its native platform
@@ -77,6 +78,24 @@ The skill neither installs models nor changes login settings.
 | OpenCode | `run --format json`, stdin prompt | `--session ID` | Dedicated `agent-meet` agent with deny-by-default permissions; read/glob/grep/list allowed |
 | DeepSeek Harness | Official `headless --json`, stdin prompt | `--session-id ID` | Read-only preset and file inspection. An individual web task can enable public search and fetch |
 | Qwen Code | `--output-format stream-json`, stdin prompt | `--resume ID` | Safe mode with the supported release's non-read built-ins excluded |
+| ZCode | Official `app-server --stdio` protocol | `session/resume` with the exact ID | Plan mode with a `Read`, `Glob`, `Grep` tool allowlist |
+
+ZCode targets the official CLI **0.17.1**, built from ZCode release `v3.18.2`.
+Use `zcode` on PATH, the native
+executable, or an explicit absolute path to the built `zcode.cjs` Node bundle.
+For a Node bundle retain its adjacent assets and use the Node version specified
+by ZCode. Configure the CLI's model provider normally. When selecting a model
+for a ZCode role, use `providerId/modelId` as configured in that CLI. For a
+model that requires a reasoning level, use `providerId/modelId$reasoningLevel`.
+
+Meeting data for ZCode lives in `ROOM.peers/IDENTITY/zcode-runtime`. Keep it
+with the SQLite room. The adapter scopes the session database and logs and
+leaves provider configuration and credentials in their usual locations.
+It sends prompts over stdio even on Windows and waits for the successful turn
+event for that exact input before recording an answer. It rejects interactive
+permission requests. Use the role in trusted workspaces because ZCode's
+model-facing allowlist does not isolate the CLI's configured startup extensions
+or trusted hooks at the operating system level.
 
 DSH targets the official `@deepseek-ai/dsh@0.2.2-rc.5` and requires Node.js ≥24.9.
 It uses a role-local `DSH_HOME` under `ROOM.peers/IDENTITY/dsh-home` to retain
@@ -152,6 +171,7 @@ Source references:
 - [OpenCode 2.x run](https://github.com/anomalyco/opencode/blob/dev/packages/cli/src/run/run.ts)
 - [DeepSeek Harness headless](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.5/packages/bundle/headless/README.zh.md)
 - [Qwen Code headless](https://github.com/QwenLM/qwen-code/blob/v0.28.0/docs/users/features/headless.md)
+- [ZCode CLI and configuration](https://github.com/zai-org/ZCode/blob/v3.18.2/apps/zcode-cli/docs/usage/README.md)
 
 New consult/group rooms default to `PROJECT/.agent-meet/UNIQUE_DISCUSSION/discussion.sqlite`
 when init omits `--room`. For skill workflows, use `storage.py prepare` first and

@@ -1,6 +1,6 @@
 'use strict';
 function engineName(backend) {
-  return { codex: 'Codex', claude: 'Claude', pi: 'pi', opencode: 'OpenCode', dsh: 'DeepSeek Harness', qwen: 'Qwen Code' }[backend] || backend;
+  return { codex: 'Codex', claude: 'Claude', pi: 'pi', opencode: 'OpenCode', dsh: 'DeepSeek Harness', qwen: 'Qwen Code', zcode: 'ZCode' }[backend] || backend;
 }
 
 const $ = (id) => document.getElementById(id);

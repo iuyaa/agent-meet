@@ -4,7 +4,6 @@
 import argparse
 import hashlib
 import json
-import shutil
 import sqlite3
 import sys
 from pathlib import Path
@@ -106,7 +105,7 @@ def initialize(args):
         for name in (args.main, args.reviewer):
             chat.join(argparse.Namespace(room=args.room, agent=name))
         config = {"mode": "existing-main", "main": args.main, "reviewer": args.reviewer,
-                  "backend": args.backend, "model": args.model, "cwd": cwd, "cli": str(Path(shutil.which(args.cli)).resolve()), "briefing": briefing}
+                  "backend": args.backend, "model": args.model, "cwd": cwd, "cli": str(peer.cli_path(args.cli, args.backend)), "briefing": briefing}
         peer.write_json(root / "config.json", config)
         (root / "briefing.md").write_text(opening + "\n", encoding="utf-8")
         peer.write_json(root / "briefing.json", briefing)

@@ -56,6 +56,10 @@ npm install -g @qwen-code/qwen-code@0.28.0
 
 DSH 需要 Node.js 24.9 或更新版本。给主持 Agent 的运行环境提供 `DEEPSEEK_API_KEY`，也可使用 DSH 支持的项目 `.env`。Qwen Code 需要 Node.js 22 或更新版本，使用已配置的模型提供方。安装后可用 `dsh --version` 或 `qwen --version` 核对版本。[CLI 与会话说明](../references/agent-adapters.md)
 
+## 安装 ZCode 参与者
+
+使用官方 ZCode CLI `0.17.1`，对应 ZCode 项目标签 `v3.18.2`。配置模型提供方后，可以用 `zcode --version` 核对 CLI 版本。如果 CLI 不在 PATH 上，可在角色的 `cli` 字段或 `--cli` 参数传入官方可执行文件或 `zcode.cjs` 的绝对路径。Node bundle 需要 Node.js 和构建生成的相邻资源。[官方 CLI 构建与自检](https://github.com/zai-org/ZCode/blob/v3.18.2/apps/zcode-cli/docs/usage/01-quickstart.md)
+
 ## 自动检查与更新
 
 从 v0.12 开始，技能会引导主持人在发起讨论、继续原会话或安排任务前执行版本检查。

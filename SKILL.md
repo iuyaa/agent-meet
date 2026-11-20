@@ -1,6 +1,6 @@
 ---
 name: agent-meet
-description: Check for Agent-Meet updates before use. Discuss across Codex, Claude, pi, OpenCode, DeepSeek Harness and Qwen Code from the original host conversation. Invite roles during a meeting, assign read-only work, public web research via DSH, or Claude implementation in an isolated Git worktree. Review results in the same room and resume original native sessions for continuation and rework. Requires Python 3 and configured local role CLIs.
+description: Check for Agent-Meet updates before use. Discuss across Codex, Claude, pi, OpenCode, DeepSeek Harness, Qwen Code and ZCode from the original host conversation. Invite roles during a meeting, assign read-only work, public web research via DSH, or Claude implementation in an isolated Git worktree. Review results in the same room and resume original native sessions for continuation and rework. Requires Python 3 and configured local role CLIs.
 ---
 
 # Agent-Meet
@@ -91,7 +91,7 @@ configured local CLIs, using their existing accounts. The host needs file and
 foreground command tools, Python 3, and access to this SKILL.md; it needs no extra
 copy of its own CLI. No Golutra or additional Python packages are required.
 Built-in participant backends: `claude`, `codex`, `pi` (pi-mono coding agent),
-`opencode`, `dsh` (DeepSeek Harness) and `qwen` (Qwen Code). A role's backend is
+`opencode`, `dsh` (DeepSeek Harness), `qwen` (Qwen Code) and `zcode` (Z.ai ZCode). A role's backend is
 independent of its title and the host's identity.
 Additional roles still default to Claude unless the user specifies otherwise.
 Read [agent adapters](references/agent-adapters.md) for reverse-host examples,

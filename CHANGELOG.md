@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.0 — ZCode meeting participants
+
+- Add the official ZCode app-server adapter for discussions and read-only assignments. Send prompts over stdio and retain the role's native session across processes.
+- Use plan mode and the Read, Glob and Grep allowlist on session creation and recovery. Validate the session and current turn's completion before recording its reply.
+- Accept official ZCode executables and explicit Node CLI bundles, with role-local session storage and separate documentation for version and provider setup.
+
 ## 0.14.0 — DeepSeek Harness and Qwen Code
 
 - Add official headless DSH and Qwen Code adapters for meetings and read-only assignments, with independent native sessions and validated continuation across processes.

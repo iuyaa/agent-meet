@@ -6,7 +6,7 @@
 
 遇到需要第二种判断或多个角色参与的问题时，向当前 agent 发起讨论。
 Meet 会调用受邀 agent，记录讨论过程，并由原主持人结合已有上下文整理结论。
-支持 **Codex、Claude Code、pi、OpenCode、DeepSeek Harness（DSH）和 Qwen Code**，可独立运行。
+支持 **Codex、Claude Code、pi、OpenCode、DeepSeek Harness（DSH）、Qwen Code 和 ZCode**，可独立运行。
 
 ```text
 $agent-meet 请 Claude 评审这个方案，重点检查边界和失败路径。

@@ -2,6 +2,7 @@
 """Start a managed discussion participant using a supported local agent CLI."""
 
 import argparse
+import concurrent.futures
 import contextlib
 import errno
 import json
@@ -10,6 +11,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -118,15 +120,28 @@ def participant_lock(directory):
         handle.close()
 
 
-def cli_prefix(executable, backend="claude"):
-    adapters.get(backend)
+def cli_path(executable, backend="claude"):
+    adapter = adapters.get(backend)
+    requested = Path(executable).expanduser()
+    if requested.suffix.lower() in getattr(adapter, "node_scripts", ()) and requested.is_file():
+        return requested.resolve()
     found = shutil.which(executable)
     if not found:
         chat.fail(f"{backend.title()} CLI not found. Install/configure its CLI first, or supply --cli with its executable path.")
-    path = Path(found).resolve()
+    return Path(found).resolve()
+
+
+def cli_prefix(executable, backend="claude"):
+    path = cli_path(executable, backend)
+    adapter = adapters.get(backend)
+    if path.suffix.lower() in getattr(adapter, "node_scripts", ()):
+        node = shutil.which("node")
+        if not node:
+            chat.fail(f"Node.js is required to run the {backend} CLI bundle")
+        return [node, str(path)]
     if path.suffix.lower() in (".cmd", ".bat", ".ps1"):
         # Avoid Windows batch quoting/shell interpretation of JSON schema args.
-        entries = adapters.get(backend).npm_entries
+        entries = adapter.npm_entries
         candidates = [base / entry for entry in entries for base in (path.parent / "node_modules", path.parent.parent)]
         script = next((p for p in candidates if p.is_file()), None)
         node = shutil.which("node")
@@ -180,22 +195,49 @@ def model_response(args, directory, run_directory, info, prompt, turn, response_
     output_path = run_directory / f"turn-{turn:03d}.result.json"
     error_path = run_directory / f"turn-{turn:03d}.stderr.txt"
     # Prompt text goes through stdin, never through a shell or command argument.
+    exchange = getattr(adapter, "exchange", None)
+    parsed = None
     with input_path.open("rb") as source, output_path.open("wb") as output, error_path.open("wb") as error:
         launch = processes.owned if getattr(args, "task_mode", False) or getattr(adapter, "owned_process", False) else legacy_process
-        with launch(command, cwd=args.cwd, stdin=source, stdout=output, stderr=error, env=environment) as process:
-            publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
-            until = time.monotonic() + args.turn_timeout
-            try:
-                while process.poll() is None:
-                    check_stop(args, directory)
-                    if time.monotonic() >= until:
-                        chat.fail(f"{backend.title()} turn timed out; inspect the runner log and retry explicitly")
-                    time.sleep(0.2)
-            finally:
-                publish(directory, info, "running", child_pid=None)
+        worker = None
+        try:
+            with launch(command, cwd=args.cwd, stdin=subprocess.PIPE if exchange else source,
+                        stdout=subprocess.PIPE if exchange else output, stderr=error, env=environment) as process:
+                publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
+                until = time.monotonic() + args.turn_timeout
+                try:
+                    if exchange:
+                        outcome = concurrent.futures.Future()
+
+                        def drive():
+                            try:
+                                outcome.set_result(exchange(args, process, source, output, info))
+                            except Exception as exc:
+                                outcome.set_exception(exc)
+
+                        worker = threading.Thread(target=drive, daemon=True)
+                        worker.start()
+                    while process.poll() is None or (worker and not outcome.done()):
+                        if worker and outcome.done():
+                            parsed = outcome.result()
+                        check_stop(args, directory)
+                        if time.monotonic() >= until:
+                            chat.fail(f"{backend.title()} turn timed out; inspect the runner log and retry explicitly")
+                        time.sleep(0.2)
+                    if worker:
+                        parsed = outcome.result()
+                finally:
+                    publish(directory, info, "running", child_pid=None)
+        finally:
+            if worker:
+                # The owned process is already stopped here, including on a timeout.
+                worker.join(timeout=2)
+                if not worker.is_alive():
+                    process.stdin.close()
+                    process.stdout.close()
     if process.returncode:
         chat.fail(f"{backend.title()} CLI exited with code {process.returncode}; see {error_path} and {output_path}")
-    result, session = adapter.parse(output_path, answer_path, directory, info)
+    result, session = parsed if exchange else adapter.parse(output_path, answer_path, directory, info)
     if not isinstance(session, str) or not session or len(session) > 200 or session.startswith("-"):
         chat.fail(f"missing or invalid {backend} native session ID")
     if info.get("native_session_id") and session != info["native_session_id"]:
