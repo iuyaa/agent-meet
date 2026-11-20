@@ -7,6 +7,7 @@
 只有发起讨论的 agent 需要安装本技能。受邀参与者需要配置好各自 CLI，
 不需要再安装一份 skill。讨论运行需要 Python 3.9+；命令安装使用第三方
 [Skills CLI](https://github.com/vercel-labs/skills)，其当前版本需要 Node.js 22.20+。
+参与者 CLI 的兼容版本和调用方式见[适配器说明](../references/agent-adapters.md#backends-sessions-and-boundaries)。
 
 实现、测试、Review 任务还需要 Git 2.31+、至少一个 Git 提交，以及配置好的 Claude Code CLI；其它受邀后端目前用于讨论。
 
@@ -44,33 +45,6 @@ Skills CLI 可能为多个宿主使用共享技能目录，而不是逐一复制
 具体路径以安装结果为准。这不影响项目讨论数据仍放在 `.agent-meet/` 下。
 `npx skills` 从 GitHub 安装这个仓库，本项目无需发布额外的 npm 安装包。
 Node.js 用于安装器，讨论仍由 Python 和各 agent CLI 执行。
-
-## 安装 DSH 或 Qwen Code 参与者
-
-在运行主持 Agent 的环境中安装需要用到的 CLI。
-
-```bash
-npm install -g @deepseek-ai/dsh@0.2.2-rc.5
-npm install -g @qwen-code/qwen-code@0.28.0
-```
-
-DSH 需要 Node.js 24.9 或更新版本。给主持 Agent 的运行环境提供 `DEEPSEEK_API_KEY`，也可使用 DSH 支持的项目 `.env`。Qwen Code 需要 Node.js 22 或更新版本，使用已配置的模型提供方。安装后可用 `dsh --version` 或 `qwen --version` 核对版本。[CLI 与会话说明](../references/agent-adapters.md)
-
-## 安装 ZCode 参与者
-
-使用官方 ZCode CLI `0.17.1`，对应 ZCode 项目标签 `v3.18.2`。配置模型提供方后，可以用 `zcode --version` 核对 CLI 版本。如果 CLI 不在 PATH 上，可在角色的 `cli` 字段或 `--cli` 参数传入官方可执行文件或 `zcode.cjs` 的绝对路径。Node bundle 需要 Node.js 和构建生成的相邻资源。[官方 CLI 构建与自检](https://github.com/zai-org/ZCode/blob/v3.18.2/apps/zcode-cli/docs/usage/01-quickstart.md)
-
-## 安装 Hermes Agent 或 Qoder CLI 参与者
-
-Hermes 使用官方 `0.21.5`（标签 `v2026.9.24`）。按官方说明安装并配置模型，用 `hermes --version` 核对版本。此版本的 Hermes 参与者可审阅会议材料，也可使用已配置的原生网页工具。[Hermes 官方版本](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.24)
-
-```bash
-npm install -g @qoder-ai/qodercli@1.1.93
-qoder login
-qoder --version
-```
-
-用登录后的 Qoder CLI 运行参与者。若 CLI 不在 PATH 上，可用角色的 `cli` 字段或 `--cli` 指向安装路径。指定模型时使用各 CLI 自己的模型名称或 ID。[Qoder CLI 文档](https://docs.qoder.com/cli/cli-reference)
 
 ## 自动检查与更新
 

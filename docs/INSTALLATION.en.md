@@ -6,6 +6,7 @@
 
 Only the agent initiating the discussion needs this skill. Invited participants need their own configured CLIs, without a separate skill installation.
 Discussions require Python 3.9+. Command installation uses the third-party [Skills CLI](https://github.com/vercel-labs/skills), whose current version requires Node.js 22.20+.
+See [CLI adapters](../references/agent-adapters.md#backends-sessions-and-boundaries) for supported versions and how Agent-Meet invokes them.
 
 Implementation/test/review tasks additionally need Git 2.31+, an existing commit, and a configured Claude Code CLI. Other invited backends remain discussion-only.
 
@@ -43,33 +44,6 @@ Skills CLI may use a shared skill directory for several hosts instead of copying
 Check the installer output for the actual paths. Project discussion data still goes under `.agent-meet/`.
 `npx skills` installs this repository from GitHub; this project does not need a separate npm installer package.
 Node.js runs the installer; Python and the agent CLIs run the discussions.
-
-## Install DSH or Qwen Code participants
-
-Install the CLI you want to invite in the environment that runs the host agent.
-
-```bash
-npm install -g @deepseek-ai/dsh@0.2.2-rc.5
-npm install -g @qwen-code/qwen-code@0.28.0
-```
-
-DSH requires Node.js 24.9 or later. Provide `DEEPSEEK_API_KEY` in the host environment or a project `.env` supported by DSH. Qwen Code requires Node.js 22 or later and a configured provider. Verify the installed version with `dsh --version` or `qwen --version`. [CLI and session details](../references/agent-adapters.md)
-
-## Install a ZCode participant
-
-Use the official ZCode CLI `0.17.1` built from the ZCode project tag `v3.18.2`. Configure a model provider and confirm the CLI version with `zcode --version`. When the command is outside PATH, set the role's `cli` field or `--cli` to the absolute path of its executable or `zcode.cjs`. The Node bundle requires Node.js and the adjacent assets produced by its build. [Official CLI build and diagnostics](https://github.com/zai-org/ZCode/blob/v3.18.2/apps/zcode-cli/docs/usage/01-quickstart.md)
-
-## Install a Hermes Agent or Qoder CLI participant
-
-Use official Hermes Agent `0.21.5` (tag `v2026.9.24`). Configure its model and check with `hermes --version`. This adapter can review evidence supplied in the meeting and use configured native web tools. [Hermes release](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.24)
-
-```bash
-npm install -g @qoder-ai/qodercli@1.1.93
-qoder login
-qoder --version
-```
-
-Use the signed-in Qoder CLI as the participant. If a CLI is outside PATH, set the role's `cli` field or pass `--cli` with its path. To select a model, use the name or ID accepted by that CLI. [Qoder CLI reference](https://docs.qoder.com/cli/cli-reference)
 
 ## Automatic updates
 
