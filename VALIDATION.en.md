@@ -4,6 +4,11 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
+## v0.17.0 Antigravity CLI and Windows desktop Codex
+
+- Ran official Antigravity CLI `1.5.18` against a local model fixture. Exercised a long multilingual briefing, explicit model selection, exact conversation recovery, in-place group promotion, a read-only assignment, and a subsequent round. Four CLI processes preserved one native conversation. The fixture read a project file and attempted an unlisted write without creating a file.
+- Simulated Windows executable precedence and fallback when the packaged MSIX executable cannot start. A native Windows installation with only ChatGPT Desktop and its existing login remains unverified.
+
 ## v0.16.0 Hermes Agent and Qoder CLI
 
 - Ran official Hermes CLI `0.21.5` with a local model fixture. Resumed the same native session for a follow-up, an in-place promotion to a group meeting, a read-only assignment, and the next discussion round. Inspected the tools sent to the model with native web tools available and disabled.

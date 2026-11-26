@@ -11,6 +11,7 @@ function engineName(backend) {
       zcode: 'ZCode',
       hermes: 'Hermes Agent',
       qoder: 'Qoder',
+      antigravity: 'Antigravity',
     }[backend] || backend
   );
 }

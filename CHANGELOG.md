@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.0 — Antigravity CLI and Windows desktop Codex discovery
+
+- Add Antigravity CLI participants for discussions and read-only assignments, with conversation IDs preserved for follow-ups.
+- Discover the Windows ChatGPT Desktop Codex CLI when the default Codex command is missing from PATH. Recheck the executable location after desktop updates.
+- Keep Agent-Meet installation steps in the bilingual installation guides and describe CLI compatibility in the adapter reference.
+
 ## 0.16.0 — Hermes Agent and Qoder CLI
 
 - Add Hermes and Qoder participants for discussions and read-only assignments. Resume each role's exact native session and accept only completed replies.

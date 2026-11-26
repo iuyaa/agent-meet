@@ -438,6 +438,71 @@ class Hermes:
         return response(final["text"]), session
 
 
+class Antigravity:
+    prompt_schema = True
+    owned_process = True
+    npm_entries = ()
+    cli = "agy"
+    version = "1.5.18"
+
+    @staticmethod
+    def agent_name(directory):
+        return "agent-meet-" + uuid.uuid5(uuid.NAMESPACE_URL, directory.as_uri()).hex[:12]
+
+    def workspace(self, directory):
+        # CLI custom agents are discovered by name. Keep the definition in
+        # the room's data and add the original project as a workspace folder.
+        root = directory / "agy-workspace"
+        agents = root / ".agents" / "agents"
+        agents.mkdir(parents=True, exist_ok=True)
+        agent = self.agent_name(directory)
+        manifest = (
+            f"---\nname: {agent}\n"
+            "description: Read-only Agent-Meet participant\n"
+            "mainAgent: true\nsubagent: false\ncommandExecutionPolicy: off\n"
+            "tools: [view_file, grep_search, find_by_name, list_dir, search_web, read_url_content, finish]\n"
+            "---\n"
+            "Evaluate the meeting brief and evidence using only read-only tools.\n"
+        )
+        definition = agents / (agent + ".md")
+        definition.write_text(manifest, encoding="utf-8")
+        return root
+
+    def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
+        require_version(prefix, args.cwd, "Antigravity", self.version)
+        command = prefix + ["--input-format", "stream-json", "--output-format", "stream-json",
+                            "--disable-slash-commands", "--agent", self.agent_name(directory),
+                            "--add-dir", args.cwd]
+        if info.get("native_session_id"):
+            command += ["--conversation", info["native_session_id"]]
+        if getattr(args, "model", None):
+            command += ["--model", args.model]
+        return command, None
+
+    @staticmethod
+    def encode_prompt(prompt):
+        return json.dumps({"event": "user", "message": {"content": prompt}}) + "\n"
+
+    def parse(self, output_path, answer_path, directory, info):
+        rows = records(output_path)
+        start, last = rows[0], rows[-1]
+        final = last.get("result")
+        if (last.get("event") != "result" or not isinstance(final, dict)
+                or final.get("status") != "SUCCESS" or final.get("error")
+                or not isinstance(final.get("response"), str)
+                or any(row.get("event") in ("result", "error") for row in rows[:-1])):
+            chat.fail(f"Antigravity did not complete a successful response; see {output_path}")
+        init = start.get("init")
+        if (start.get("event") != "init" or not isinstance(init, dict)
+                or init.get("agent") != self.agent_name(directory)
+                or any(row.get("event") == "init" for row in rows[1:])):
+            chat.fail(f"Antigravity did not select the meeting's read-only agent; see {output_path}")
+        session = session_ids([start, final], "conversation_id")
+        if start.get("conversation_id") != session or final.get("conversation_id") != session:
+            chat.fail(f"Antigravity did not confirm its native conversation ID; see {output_path}")
+        return response(final["response"]), session
+
+
 class ZCodeConnection:
     """One stdio connection and one correlated meeting turn."""
 
@@ -606,6 +671,7 @@ REGISTRY = {
     "zcode": ZCode(),
     "hermes": Hermes(),
     "qoder": Qoder(),
+    "antigravity": Antigravity(),
 }
 BACKENDS = tuple(REGISTRY)
 
@@ -614,3 +680,7 @@ def get(backend):
     if backend not in REGISTRY:
         chat.fail("unsupported agent backend; choose " + ", ".join(BACKENDS))
     return REGISTRY[backend]
+
+
+def default_cli(backend):
+    return getattr(get(backend), "cli", backend)

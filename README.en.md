@@ -6,7 +6,7 @@ Bring different AI agents into a discussion from your current conversation.
 
 When you need a second opinion or several roles to examine a problem, ask your current agent to start a discussion.
 Meet calls the invited agents, records the exchange, and lets the original host draw conclusions using the context already in your conversation.
-It supports **Codex, Claude Code, pi, OpenCode, DeepSeek Harness (DSH), Qwen Code, ZCode, Hermes Agent, and Qoder CLI**.
+It supports **Codex, Claude Code, pi, OpenCode, DeepSeek Harness (DSH), Qwen Code, ZCode, Hermes Agent, Qoder CLI, and Antigravity CLI**.
 
 ```text
 $agent-meet Ask Claude to review this proposal, focusing on boundaries and failure paths.
@@ -32,6 +32,7 @@ same Claude session when needed, then apply the accepted changes.
 ## Get started
 
 You need Python 3.9+ and an installed, configured local CLI for each invited agent.
+On Windows, Agent-Meet checks for a runnable CLI bundled with ChatGPT Desktop when inviting Codex and `codex` is absent from PATH.
 Only the initiating agent needs the skill; the original host stays in its current conversation.
 
 Run this from the project where you want to use it, then select the initiating agent when prompted:

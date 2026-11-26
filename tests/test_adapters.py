@@ -11,6 +11,7 @@ from unittest import mock
 from test_peer import SCRIPTS, FAKE_CLAUDE
 from test_discuss import FAKE_CODEX
 import adapters
+import codex_desktop
 import peer
 
 FAKE_AGENT = r'''#!/usr/bin/env python3
@@ -138,6 +139,88 @@ else:
 '''
 
 
+FAKE_ANTIGRAVITY = r'''#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+if sys.argv[1:] == ['--version']:
+    print('1.5.18')
+    sys.exit(0)
+
+args = sys.argv[1:]
+project = Path(args[args.index('--add-dir') + 1])
+agent = args[args.index('--agent') + 1]
+definition = (Path.cwd() / '.agents' / 'agents' / (agent + '.md')).read_text()
+assert 'commandExecutionPolicy: off' in definition
+assert 'view_file' in definition and 'run_command' not in definition and 'write_to_file' not in definition
+assert '--disable-slash-commands' in args
+assert args[args.index('--input-format') + 1] == 'stream-json'
+assert args[args.index('--output-format') + 1] == 'stream-json'
+frame = json.loads(sys.stdin.read())
+assert frame['event'] == 'user'
+prompt = frame['message']['content']
+assert 'Return ONLY one JSON object' in prompt
+context = json.loads(prompt.split('Discussion data:\n', 1)[1])
+mode_path = project / 'mode'
+mode = mode_path.read_text() if mode_path.exists() else 'ok'
+session = 'agy-original-conversation'
+log = project / ('calls-' + context['your_identity'] + '.jsonl')
+if '--conversation' in args:
+    assert args[args.index('--conversation') + 1] == session
+    assert log.exists()
+with log.open('a', encoding='utf-8') as out:
+    out.write(json.dumps({'argv': args, 'context': context, 'session': session}) + '\n')
+if mode == 'switch':
+    session = 'unexpected-conversation'
+print(json.dumps({'event': 'init', 'conversation_id': session,
+                  'init': {'agent': 'other-agent' if mode == 'wrong-agent' else agent}}))
+reply = {'action': 'send', 'text': '可复用原会话。', 'decision': 'none', 'conclusion': {
+    'summary': '', 'agreements': [], 'disagreements': [], 'open_questions': [], 'evidence_message_ids': []}}
+if mode != 'truncated':
+    print(json.dumps({'event': 'result', 'result': {
+        'status': 'WAITING' if mode == 'waiting' else 'SUCCESS',
+        'conversation_id': session, 'response': json.dumps(reply)}}))
+'''
+
+
+class CodexDesktopTests(unittest.TestCase):
+    def test_cli_precedence_and_portable_desktop_selection(self):
+        existing = Path('/existing/codex.exe')
+        bundled = Path('/bundled/codex.exe')
+        with mock.patch.object(peer.processes, 'WINDOWS', True), \
+                mock.patch.object(peer.shutil, 'which', side_effect=[str(existing), str(existing), None, None]), \
+                mock.patch.object(codex_desktop, 'find_cli', return_value=bundled) as find:
+            self.assertEqual(peer.cli_prefix('codex', 'codex'), [str(existing.resolve())])
+            self.assertEqual(peer.configured_cli(str(existing), 'codex'), str(existing.resolve()))
+            find.assert_not_called()
+            self.assertEqual(peer.configured_cli('codex', 'codex'), 'codex')
+            self.assertEqual(peer.cli_prefix('codex', 'codex'), [str(bundled)])
+        with mock.patch.object(peer.processes, 'WINDOWS', True), \
+                mock.patch.object(peer.shutil, 'which', return_value=None), \
+                mock.patch.object(codex_desktop, 'find_cli') as find:
+            with self.assertRaises(peer.chat.ChatError):
+                peer.cli_path('/missing/codex.exe', 'codex')
+            find.assert_not_called()
+
+    def test_unlaunchable_msix_candidate_falls_back_to_relocated_cli(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bundled = root / 'app/resources/codex.exe'
+            bundled.parent.mkdir(parents=True)
+            bundled.touch()
+            relocated = root / 'relocated/codex.exe'
+            relocated.parent.mkdir()
+            relocated.touch()
+            help_text = subprocess.CompletedProcess([], 0, '--json --output-schema resume', '')
+            with mock.patch.object(codex_desktop, 'installed_package_roots', return_value=[root]), \
+                    mock.patch.object(codex_desktop, 'relocated_candidates', return_value=[relocated]), \
+                    mock.patch.object(codex_desktop.subprocess, 'run', side_effect=[PermissionError(), help_text]) as run:
+                self.assertEqual(codex_desktop.find_cli(), relocated)
+            self.assertEqual([call.args[0] for call in run.call_args_list],
+                             [[str(bundled), 'exec', '--help'], [str(relocated), 'exec', '--help']])
+
+
 @unittest.skipIf(os.name == 'nt', 'subprocess fixtures use Unix shebangs')
 class AdapterTests(unittest.TestCase):
     def setUp(self):
@@ -150,7 +233,8 @@ class AdapterTests(unittest.TestCase):
         self.clis = {}
         for name, body in [('claude', FAKE_CLAUDE), ('codex', FAKE_CODEX), ('pi', FAKE_AGENT), ('opencode', FAKE_AGENT),
                            ('dsh', FAKE_HEADLESS), ('qwen', FAKE_HEADLESS),
-                           ('hermes', FAKE_HEADLESS), ('qoder', FAKE_HEADLESS)]:
+                           ('hermes', FAKE_HEADLESS), ('qoder', FAKE_HEADLESS),
+                           ('antigravity', FAKE_ANTIGRAVITY)]:
             path=self.root / ('fake '+name);path.write_text(body);path.chmod(0o755);self.clis[name]=path
 
     def tearDown(self):
@@ -219,8 +303,10 @@ class AdapterTests(unittest.TestCase):
                 self.assertEqual(reviewed['status']['conclusion_status'],'confirmed')
                 self.assertEqual(reviewed['model']['native_session_id'],first['model']['native_session_id'])
 
-    def test_one_group_can_mix_all_engines_under_opencode_host(self):
-        roles=[{'id':name+'-role','title':name,'focus':'核实证据','backend':name,'cli':str(cli)} for name,cli in self.clis.items()]
+    def test_one_group_can_mix_eight_engines_under_opencode_host(self):
+        backends = ('claude', 'codex', 'pi', 'opencode', 'dsh', 'qwen', 'qoder', 'antigravity')
+        roles=[{'id':name+'-role','title':name,'focus':'核实证据','backend':name,'cli':str(self.clis[name])}
+               for name in backends]
         path=self.root/'roles.json';path.write_text(json.dumps(roles))
         self.command('group.py','init','--cwd',self.root,'--briefing-file',self.brief,'--roles-file',path,
                      '--main','opencode','--rounds','1')
@@ -233,7 +319,7 @@ class AdapterTests(unittest.TestCase):
         for role in roles:
             info=peer.read_status(peer.paths(self.room,role['id']))
             self.assertTrue(info['native_session_id'])
-        for backend in ('pi','opencode','dsh','qwen'):
+        for backend in ('pi','opencode','dsh','qwen','antigravity'):
             calls=self.calls(backend+'-role');self.assertEqual(len(calls),2)
             self.assertEqual(calls[1]['context']['your_role']['backend'],backend)
 
@@ -330,6 +416,43 @@ class AdapterTests(unittest.TestCase):
                     (self.root / 'mode').write_text(mode)
                     self.reply(ok=False)
                     self.assertEqual(self.command('consult.py', 'status')['status']['message_count'], 1)
+
+    def test_antigravity_resumes_through_promotion_and_readonly_assignment(self):
+        self.initialize('antigravity', 'codex', '--model', 'fixture-model')
+        native = self.reply()['model']['native_session_id']
+        self.send('codex')
+        self.assertEqual(self.reply('followup')['model']['native_session_id'], native)
+        spec = self.root / 'agy-task.json'
+        spec.write_text(json.dumps({'title': 'Inspect evidence', 'instructions': 'Review project facts',
+                                    'context': 'Evidence review', 'constraints': [],
+                                    'acceptance_criteria': ['Name the original evidence']}))
+        self.command('meeting.py', 'assign', '--as', 'codex', '--to', 'antigravity', '--type', 'readonly',
+                     '--task-id', 'inspect', '--request-id', 'assign', '--file', spec)
+        self.command('meeting.py', 'run', '--as', 'codex', '--task-id', 'inspect', '--request-id', 'run')
+        calls = self.calls('antigravity')
+        self.assertEqual(len(calls), 3)
+        self.assertNotIn('--conversation', calls[0]['argv'])
+        for call in calls[1:]:
+            argv = call['argv']
+            self.assertEqual(argv[argv.index('--conversation') + 1], native)
+            self.assertEqual(argv[argv.index('--model') + 1], 'fixture-model')
+        self.assertEqual(calls[-1]['context']['task']['title'], 'Inspect evidence')
+        self.assertEqual(adapters.default_cli('antigravity'), 'agy')
+
+    def test_antigravity_rejects_incomplete_turns_and_different_conversations(self):
+        for mode in ('truncated', 'waiting', 'wrong-agent', 'switch'):
+            with self.subTest(mode=mode):
+                self.room = self.root / f'agy-{mode}.sqlite'
+                mode_path = self.root / 'mode'
+                mode_path.unlink(missing_ok=True)
+                self.initialize('antigravity')
+                native = self.reply()['model']['native_session_id']
+                self.send()
+                mode_path.write_text(mode)
+                self.reply('followup', ok=False)
+                state = self.command('consult.py', 'status')
+                self.assertEqual(state['status']['message_count'], 3)
+                self.assertEqual(state['model']['native_session_id'], native)
 
     def test_invalid_new_engine_outputs_never_become_discussion_messages(self):
         for backend in ('pi','opencode'):

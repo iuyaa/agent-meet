@@ -1,6 +1,6 @@
 ---
 name: agent-meet
-description: Check for Agent-Meet updates before use. Discuss across Codex, Claude, pi, OpenCode, DeepSeek Harness, Qwen Code, ZCode, Hermes Agent and Qoder from the original host conversation. Invite roles, assign read-only work or Claude implementation in an isolated Git worktree, and review results in the same room. Resume native sessions for continuation and rework. Requires Python 3 and configured local role CLIs.
+description: Check for Agent-Meet updates before use. Discuss across Codex, Claude, pi, OpenCode, DeepSeek Harness, Qwen Code, ZCode, Hermes Agent, Qoder and Antigravity from the original host conversation. Invite roles, assign read-only work or Claude implementation in an isolated Git worktree, and review results in the same room. Resume native sessions for continuation and rework. Requires Python 3 and configured local role CLIs.
 ---
 
 # Agent-Meet
@@ -95,8 +95,11 @@ foreground command tools, Python 3, and access to this SKILL.md; it needs no ext
 copy of its own CLI. No Golutra or additional Python packages are required.
 Built-in participant backends: `claude`, `codex`, `pi` (pi-mono coding agent),
 `opencode`, `dsh` (DeepSeek Harness), `qwen` (Qwen Code), `zcode` (Z.ai ZCode),
-`hermes` (Nous Research Hermes Agent) and `qoder` (Qoder CLI). A role's backend is
+`hermes` (Nous Research Hermes Agent), `qoder` (Qoder CLI) and `antigravity` (Google Antigravity CLI, executable `agy`). A role's backend is
 independent of its title and the host's identity.
+On Windows, the Codex backend can discover a runnable CLI bundled with ChatGPT
+Desktop when `codex` is absent from PATH. It opens a new role session on the
+host machine and preserves that session for follow-ups.
 Additional roles still default to Claude unless the user specifies otherwise.
 Read [agent adapters](references/agent-adapters.md) for reverse-host examples,
 installation discovery, version boundaries and adding another CLI adapter.

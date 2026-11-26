@@ -15,6 +15,7 @@ Do not start another copy of the host to run the discussion.
 | Codex | ZCode | `--main codex --backend zcode` |
 | Codex | Hermes Agent | `--main codex --backend hermes` |
 | Hermes Agent | Qoder CLI | `--main hermes --backend qoder` |
+| Codex | Antigravity CLI | `--main codex --backend antigravity` |
 | Claude Code | another Claude | `--main claude --backend claude` (reviewer defaults to `claude-peer`) |
 
 These are examples, not restricted pairings. Any host with file/command tools and
@@ -63,7 +64,7 @@ when discovery is unavailable. Reading a skill cannot add file/command capabilit
 to a host that does not provide them.
 
 Invited agents need configured local CLIs on PATH (`claude`, `codex`, `pi`,
-`opencode`, `dsh`, `qwen`, `zcode`, `hermes`, `qoder`), or a role/consult `--cli` executable path. No shell command strings
+`opencode`, `dsh`, `qwen`, `zcode`, `hermes`, `qoder`, `agy`), or a role/consult `--cli` executable path. No shell command strings
 or extra argument injection are supported. Windows Claude/Codex npm wrappers
 resolve their Node entry point; pi supports the original `@mariozechner` package
 and the newer `@earendil-works` bundled entry. OpenCode requires its native platform
@@ -83,6 +84,22 @@ The skill neither installs models nor changes login settings.
 | ZCode | Official `app-server --stdio` protocol | `session/resume` with the exact ID | Plan mode with a `Read`, `Glob`, `Grep` tool allowlist |
 | Hermes Agent | `chat --format stream-json`, stdin prompt | `--resume ID` | Supplied evidence and Hermes' native web toolset when available |
 | Qoder CLI | `-p --output-format stream-json`, stdin prompt | `--resume ID` | `Read`, `Glob`, `Grep` plus native `WebSearch`/`WebFetch` when available and permitted |
+| Antigravity CLI | `agy --input-format stream-json --output-format stream-json` | `--conversation ID` | Dedicated agent with native file inspection and public web tools as available |
+
+On Windows, an explicit Codex executable and `codex` on PATH take precedence.
+With the default `codex` selection and no PATH match, Agent-Meet checks the
+registered ChatGPT Desktop package and its per-user runtime cache for a CLI
+that can run `codex exec`. The CLI uses its existing authentication and
+configuration. The participant starts its own meeting conversation and resumes
+it on follow-up. The original host session stays in the host application.
+
+Antigravity targets official CLI **1.5.18**. Select `backend: antigravity` and use
+the configured `agy` executable. An optional model uses Antigravity's model
+identifier. The adapter stores a dedicated agent definition in the role's room
+data and adds the project directory for file inspection. The agent's tool list
+limits it to native read and web capabilities. Normal CLI startup still uses the
+configured profile and its trusted extensions. Preserve the CLI's conversation
+storage with the meeting data for continuation. [Antigravity headless protocol](https://antigravity.google/docs/cli/headless/)
 
 Hermes targets **0.21.5** (release `v2026.9.24`) with local single-query
 execution. Use the configured `hermes` CLI and its native model identifier

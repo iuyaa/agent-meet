@@ -18,6 +18,7 @@ from pathlib import Path
 
 import chat
 import adapters
+import codex_desktop
 import processes
 
 
@@ -129,13 +130,19 @@ def cli_path(executable, backend="claude"):
     if requested.suffix.lower() in getattr(adapter, "node_scripts", ()) and requested.is_file():
         return requested.resolve()
     found = shutil.which(executable)
-    if not found:
-        chat.fail(f"{backend.title()} CLI not found. Install/configure its CLI first, or supply --cli with its executable path.")
-    return Path(found).resolve()
+    if found:
+        return Path(found).resolve()
+    if processes.WINDOWS and backend == executable == "codex":
+        desktop_cli = codex_desktop.find_cli()
+        if desktop_cli:
+            return desktop_cli
+        chat.fail("Codex CLI not found on PATH and no runnable ChatGPT Desktop Codex CLI was detected. "
+                  "Supply --cli with an executable path if available.")
+    chat.fail(f"{backend.title()} CLI not found. Install/configure its CLI first, or supply --cli with its executable path.")
 
 
-def cli_prefix(executable, backend="claude"):
-    path = cli_path(executable, backend)
+def cli_prefix(executable, backend="claude", *, path=None):
+    path = path if path is not None else cli_path(executable, backend)
     adapter = adapters.get(backend)
     if path.suffix.lower() in getattr(adapter, "node_scripts", ()):
         node = shutil.which("node")
@@ -152,6 +159,15 @@ def cli_prefix(executable, backend="claude"):
             chat.fail(f"Cannot resolve this {backend} wrapper. Supply --cli pointing to its native executable.")
         return [node, str(script)]
     return [str(path)]
+
+
+def configured_cli(executable, backend):
+    path = cli_path(executable, backend)
+    cli_prefix(executable, backend, path=path)
+    if processes.WINDOWS and backend == executable == "codex":
+        # The desktop package location can change when Windows updates it.
+        return executable
+    return str(path)
 
 
 def claude_prefix(executable):
@@ -190,11 +206,14 @@ def model_response(args, directory, run_directory, info, prompt, turn, response_
     prefix = cli_prefix(args.cli, backend)
     answer_path = run_directory / f"turn-{turn:03d}.answer.json"
     adapter = adapters.get(backend)
+    workspace = getattr(adapter, "workspace", None)
+    cwd = workspace(directory) if workspace else args.cwd
     command, environment = adapter.command(args, directory, run_directory, info, prefix, answer_path, schema)
     if adapter.prompt_schema:
         prompt = "Return ONLY one JSON object matching this schema (no commentary outside JSON):\n" + json.dumps(schema) + "\n" + prompt
     input_path = run_directory / f"turn-{turn:03d}.prompt.txt"
-    input_path.write_text(prompt, encoding="utf-8")
+    encode_prompt = getattr(adapter, "encode_prompt", None)
+    input_path.write_text(encode_prompt(prompt) if encode_prompt else prompt, encoding="utf-8")
     output_path = run_directory / f"turn-{turn:03d}.result.json"
     error_path = run_directory / f"turn-{turn:03d}.stderr.txt"
     # Prompt text goes through stdin, never through a shell or command argument.
@@ -204,7 +223,7 @@ def model_response(args, directory, run_directory, info, prompt, turn, response_
         launch = processes.owned if getattr(args, "task_mode", False) or getattr(adapter, "owned_process", False) else legacy_process
         worker = None
         try:
-            with launch(command, cwd=args.cwd, stdin=subprocess.PIPE if exchange else source,
+            with launch(command, cwd=cwd, stdin=subprocess.PIPE if exchange else source,
                         stdout=subprocess.PIPE if exchange else output, stderr=error, env=environment) as process:
                 publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
                 until = time.monotonic() + args.turn_timeout
@@ -413,7 +432,7 @@ def main():
             p.add_argument("--run-id", required=True)
     args = parser.parse_args()
     if args.command in ("start", "_worker"):
-        args.cli = args.cli or args.backend
+        args.cli = args.cli or adapters.default_cli(args.backend)
     try:
         if args.command == "_worker":
             return worker(args)

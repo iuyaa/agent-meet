@@ -6,7 +6,7 @@
 
 遇到需要第二种判断或多个角色参与的问题时，向当前 agent 发起讨论。
 Meet 会调用受邀 agent，记录讨论过程，并由原主持人结合已有上下文整理结论。
-支持 **Codex、Claude Code、pi、OpenCode、DeepSeek Harness（DSH）、Qwen Code、ZCode、Hermes Agent 和 Qoder CLI**，可独立运行。
+支持 **Codex、Claude Code、pi、OpenCode、DeepSeek Harness（DSH）、Qwen Code、ZCode、Hermes Agent、Qoder CLI 和 Antigravity CLI**，可独立运行。
 
 ```text
 $agent-meet 请 Claude 评审这个方案，重点检查边界和失败路径。
@@ -17,6 +17,7 @@ $agent-meet 请 Claude 评审这个方案，重点检查边界和失败路径。
 ## 开始使用
 
 需要 Python 3.9+，以及受邀 agent 已安装并配置好的本地 CLI。
+Windows 上邀请 Codex 时，如果 PATH 中没有 `codex`，Agent-Meet 会查找 ChatGPT Desktop 内置且可运行的 CLI。
 只有发起端需要安装 skill；原主持人不需要另开一个 CLI 会话。
 
 在需要使用的项目目录执行，按提示选择发起端：

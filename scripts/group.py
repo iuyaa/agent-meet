@@ -177,9 +177,8 @@ def validate_role(role, names):
     role.setdefault("backend", "claude")
     if role["backend"] not in peer.adapters.BACKENDS:
         chat.fail("role backend must be one of: " + ", ".join(peer.adapters.BACKENDS))
-    role["cli"] = chat.nonempty(role.get("cli", role["backend"]), "cli")
-    peer.cli_prefix(role["cli"], role["backend"])
-    role["cli"] = str(peer.cli_path(role["cli"], role["backend"]))
+    role["cli"] = chat.nonempty(role.get("cli", peer.adapters.default_cli(role["backend"])), "cli")
+    role["cli"] = peer.configured_cli(role["cli"], role["backend"])
     if "model" in role:
         role["model"] = chat.nonempty(role["model"], "model")
     return role
