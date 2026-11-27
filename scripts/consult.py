@@ -206,7 +206,8 @@ def reply(args):
             except BaseException as exc:
                 cached.update(phase="failed", error=str(exc))
                 peer.write_json(cache_path, cached)
-                peer.publish(root, info, "failed", pending_request=None, detail=str(exc))
+                peer.publish(root, info, "failed", pending_request=None, detail=str(exc),
+                             native_session_id=model_info["native_session_id"])
                 raise
         try:
             latest, latest_events = snapshot(args.room, config)

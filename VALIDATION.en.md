@@ -4,6 +4,11 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
+## v0.17.1 Antigravity timeout recovery
+
+- Stalled the first streaming reply from official CLI `1.5.18` using a local model fixture. The timed-out turn recorded no meeting reply, an explicit retry reused the same native conversation, and the call directory contained `agy.log`.
+- Regression coverage checks first-turn timeouts, log paths, and native conversation recovery in two-person and group meetings. The user's live Google stream was not reproduced.
+
 ## v0.17.0 Antigravity CLI and Windows desktop Codex
 
 - Ran official Antigravity CLI `1.5.18` against a local model fixture. Exercised a long multilingual briefing, explicit model selection, exact conversation recovery, in-place group promotion, a read-only assignment, and a subsequent round. Four CLI processes preserved one native conversation. The fixture read a project file and attempted an unlisted write without creating a file.

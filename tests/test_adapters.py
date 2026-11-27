@@ -142,6 +142,7 @@ else:
 FAKE_ANTIGRAVITY = r'''#!/usr/bin/env python3
 import json
 import sys
+import time
 from pathlib import Path
 
 if sys.argv[1:] == ['--version']:
@@ -155,6 +156,7 @@ definition = (Path.cwd() / '.agents' / 'agents' / (agent + '.md')).read_text()
 assert 'commandExecutionPolicy: off' in definition
 assert 'view_file' in definition and 'run_command' not in definition and 'write_to_file' not in definition
 assert '--disable-slash-commands' in args
+assert Path(args[args.index('--log-file') + 1]).name == 'agy.log'
 assert args[args.index('--input-format') + 1] == 'stream-json'
 assert args[args.index('--output-format') + 1] == 'stream-json'
 frame = json.loads(sys.stdin.read())
@@ -164,7 +166,7 @@ assert 'Return ONLY one JSON object' in prompt
 context = json.loads(prompt.split('Discussion data:\n', 1)[1])
 mode_path = project / 'mode'
 mode = mode_path.read_text() if mode_path.exists() else 'ok'
-session = 'agy-original-conversation'
+session = '44444444-4444-4444-8444-444444444444'
 log = project / ('calls-' + context['your_identity'] + '.jsonl')
 if '--conversation' in args:
     assert args[args.index('--conversation') + 1] == session
@@ -174,7 +176,9 @@ with log.open('a', encoding='utf-8') as out:
 if mode == 'switch':
     session = 'unexpected-conversation'
 print(json.dumps({'event': 'init', 'conversation_id': session,
-                  'init': {'agent': 'other-agent' if mode == 'wrong-agent' else agent}}))
+                  'init': {'agent': 'other-agent' if mode == 'wrong-agent' else agent}}), flush=True)
+if mode == 'stall':
+    time.sleep(30)
 reply = {'action': 'send', 'text': '可复用原会话。', 'decision': 'none', 'conclusion': {
     'summary': '', 'agreements': [], 'disagreements': [], 'open_questions': [], 'evidence_message_ids': []}}
 if mode != 'truncated':
@@ -453,6 +457,35 @@ class AdapterTests(unittest.TestCase):
                 state = self.command('consult.py', 'status')
                 self.assertEqual(state['status']['message_count'], 3)
                 self.assertEqual(state['model']['native_session_id'], native)
+
+    def test_antigravity_first_timeout_keeps_the_native_conversation_for_retry(self):
+        for script, action in (('consult.py', 'reply'), ('group.py', 'round')):
+            with self.subTest(mode=action):
+                self.room = self.root / f'agy-{action}.sqlite'
+                log = self.root / 'calls-antigravity.jsonl'
+                log.unlink(missing_ok=True)
+                if action == 'reply':
+                    self.initialize('antigravity', 'codex')
+                else:
+                    roles = self.root / 'agy-roles.json'
+                    roles.write_text(json.dumps([{'id': 'antigravity', 'title': 'Review', 'focus': 'Check facts',
+                                                  'backend': 'antigravity', 'cli': str(self.clis['antigravity'])}]))
+                    self.command(script, 'init', '--cwd', self.root, '--briefing-file', self.brief,
+                                 '--main', 'codex', '--roles-file', roles)
+                (self.root / 'mode').write_text('stall')
+                failure = self.command(script, action, '--request-id', 'interrupted', '--turn-timeout', '1', ok=False)
+                error = failure['error'] if action == 'reply' else failure['errors']['antigravity']
+                self.assertIn('timed out after 1s', error)
+                self.assertIn('turn-001.result.json', error)
+                state = self.command(script, 'status')
+                self.assertEqual(state['status']['message_count'], 1)
+                known = state['model'] if action == 'reply' else peer.read_status(peer.paths(self.room, 'antigravity'))
+                session = self.calls('antigravity')[0]['session']
+                self.assertEqual(known['native_session_id'], session)
+                (self.root / 'mode').unlink()
+                self.command(script, action, '--request-id', 'retry')
+                argv = self.calls('antigravity')[-1]['argv']
+                self.assertEqual(argv[argv.index('--conversation') + 1], session)
 
     def test_invalid_new_engine_outputs_never_become_discussion_messages(self):
         for backend in ('pi','opencode'):

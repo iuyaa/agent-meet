@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.1 — Antigravity timeout recovery
+
+- Retain Antigravity's conversation ID after it initializes, even when the first turn times out before producing a reply. An explicit retry resumes that conversation.
+- Include the time budget and log paths in timeout errors, and save the native Antigravity log alongside each call.
+- Use the read and web tool names supported by the pinned Antigravity CLI.
+
 ## 0.17.0 — Antigravity CLI and Windows desktop Codex discovery
 
 - Add Antigravity CLI participants for discussions and read-only assignments, with conversation IDs preserved for follow-ups.

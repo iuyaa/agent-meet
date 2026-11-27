@@ -244,7 +244,8 @@ def model_response(args, directory, run_directory, info, prompt, turn, response_
                             parsed = outcome.result()
                         check_stop(args, directory)
                         if time.monotonic() >= until:
-                            chat.fail(f"{backend.title()} turn timed out; inspect the runner log and retry explicitly")
+                            chat.fail(f"{backend.title()} turn timed out after {args.turn_timeout}s; "
+                                      f"see {error_path} and {output_path}")
                         time.sleep(0.2)
                     if worker:
                         parsed = outcome.result()
@@ -257,6 +258,12 @@ def model_response(args, directory, run_directory, info, prompt, turn, response_
                 if not worker.is_alive():
                     process.stdin.close()
                     process.stdout.close()
+            started_session = getattr(adapter, "started_session", None)
+            if started_session and not info.get("native_session_id"):
+                output.close()
+                session = started_session(output_path, directory)
+                if session:
+                    info["native_session_id"] = session
     if process.returncode:
         chat.fail(f"{backend.title()} CLI exited with code {process.returncode}; see {error_path} and {output_path}")
     result, session = parsed if exchange else adapter.parse(output_path, answer_path, directory, info)

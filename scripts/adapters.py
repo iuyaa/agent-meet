@@ -460,7 +460,7 @@ class Antigravity:
             f"---\nname: {agent}\n"
             "description: Read-only Agent-Meet participant\n"
             "mainAgent: true\nsubagent: false\ncommandExecutionPolicy: off\n"
-            "tools: [view_file, grep_search, find_by_name, list_dir, search_web, read_url_content, finish]\n"
+            "tools: [view_file, search_web, finish]\n"
             "---\n"
             "Evaluate the meeting brief and evidence using only read-only tools.\n"
         )
@@ -472,7 +472,7 @@ class Antigravity:
         require_version(prefix, args.cwd, "Antigravity", self.version)
         command = prefix + ["--input-format", "stream-json", "--output-format", "stream-json",
                             "--disable-slash-commands", "--agent", self.agent_name(directory),
-                            "--add-dir", args.cwd]
+                            "--add-dir", args.cwd, "--log-file", str(run_directory / "agy.log")]
         if info.get("native_session_id"):
             command += ["--conversation", info["native_session_id"]]
         if getattr(args, "model", None):
@@ -482,6 +482,26 @@ class Antigravity:
     @staticmethod
     def encode_prompt(prompt):
         return json.dumps({"event": "user", "message": {"content": prompt}}) + "\n"
+
+    def started_session(self, output_path, directory):
+        # A timed-out turn can already have a valid, resumable conversation.
+        # Read only the complete startup frame, even if the stream ends mid-line.
+        try:
+            with output_path.open("rb") as output:
+                line = output.readline(64 * 1024)
+            if not line.endswith(b"\n"):
+                return None
+            start = json.loads(line.decode("utf-8-sig"))
+            if not isinstance(start, dict) or start.get("event") != "init":
+                return None
+            init = start.get("init")
+            session = start.get("conversation_id")
+            if isinstance(init, dict) and init.get("agent") == self.agent_name(directory) and isinstance(session, str):
+                if str(uuid.UUID(session)) == session:
+                    return session
+        except (OSError, ValueError):
+            pass
+        return None
 
     def parse(self, output_path, answer_path, directory, info):
         rows = records(output_path)

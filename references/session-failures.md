@@ -10,6 +10,8 @@ does not establish the CLI's failure cause.
   failed call's `.stderr.txt`, `.result.json`, and `.prompt.txt`. Two-person logs
   are under `<ROOM>.consult/turn-N/`; group logs are under
   `<ROOM>.group/<request-digest>-<role-id>/`. Use this room's actual paths.
+  For Antigravity, `agy.log` in that same call directory contains the native CLI
+  diagnostics. Compare the last stream event with the CLI error and elapsed time.
 - Check the configured executable's version. Distinguish explicit compaction or
   context errors from authentication, usage limits, invalid output, and Meet's
   per-call timeout. A timeout alone does not establish a compaction failure.
@@ -22,6 +24,11 @@ does not establish the CLI's failure cause.
 Do not repeatedly retry an unchanged failure. Inspect logs, address the specific
 cause, and use a new request ID to retry a failed call explicitly. Successful and
 response-ready retries retain their existing idempotent behavior.
+
+Antigravity can initialize a conversation before the first reply is ready.
+Agent-Meet retains the ID from the startup frame for that exact role, including
+on a timeout. An explicit retry resumes that conversation. An incomplete
+reply remains outside the meeting transcript.
 
 ## Recover the original session first
 
