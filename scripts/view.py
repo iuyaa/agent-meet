@@ -64,8 +64,7 @@ def snapshot(room):
             settings = group.config(conn)
             workers = {}
             for role in settings["roles"]:
-                info = peer.read_status(peer.paths(room, role["id"]))
-                workers[role["id"]] = {key: info[key] for key in ("state", "detail") if key in info}
+                workers[role["id"]] = peer.public_status(peer.read_status(peer.paths(room, role["id"])))
             return {"status": status, "events": events, "briefing": settings["briefing"],
                     "main": settings["main"]["id"], "reviewer": None, "roles": status["roles"],
                     "workers": workers, "model": {}, "worker": {}}
@@ -76,8 +75,7 @@ def snapshot(room):
     # Expose progress and errors, never CLI arguments, native IDs or filesystem logs.
     return {"status": status, "events": events, "briefing": config.get("briefing"),
             "main": config.get("main", status["participants"][0]), "reviewer": reviewer,
-            "model": {key: model[key] for key in ("state", "detail") if key in model},
-            "worker": {key: worker[key] for key in ("state", "detail") if key in worker}}
+            "model": peer.public_status(model), "worker": peer.public_status(worker)}
 
 
 class Viewer(HTTPServer):

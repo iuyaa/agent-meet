@@ -93,9 +93,11 @@ that can run `codex exec`. The CLI uses its existing authentication and
 configuration. The participant starts its own meeting conversation and resumes
 it on follow-up. The original host session stays in the host application.
 
-Antigravity targets official CLI **1.5.18**. Select `backend: antigravity` and use
-the configured `agy` executable. An optional model uses Antigravity's model
-identifier. The adapter stores a dedicated agent definition in the role's room
+Select `backend: antigravity` to use the configured `agy` executable. The
+adapter accepts versions that support its headless streaming protocol and
+validates the selected agent, final result and conversation ID. This protocol
+was verified with official CLI **1.5.18**. An optional model uses Antigravity's
+model identifier. The adapter stores a dedicated agent definition in the role's room
 data and adds the project directory for file inspection. The agent's tool list
 limits it to native read and web capabilities. Normal CLI startup still uses the
 configured profile and its trusted extensions. Preserve the CLI's conversation

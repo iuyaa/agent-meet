@@ -12,6 +12,14 @@ does not establish the CLI's failure cause.
   `<ROOM>.group/<request-digest>-<role-id>/`. Use this room's actual paths.
   For Antigravity, `agy.log` in that same call directory contains the native CLI
   diagnostics. Compare the last stream event with the CLI error and elapsed time.
+- Use the call's `error_code` (per role in `group.py round`'s `error_codes`).
+  `idle_timeout` means no progress was visible within the idle period. Some
+  CLIs buffer their reply, so silence provides no evidence about model activity.
+  `turn_timeout` means Agent-Meet reached the hard per-call limit.
+  `discussion_budget` means the discussion phase ended while a reply was
+  pending. `backend_timeout` means the CLI explicitly reported its own timeout.
+  `call_failed` leaves the cause in the error detail and logs. These outcomes
+  leave the reply unrecorded.
 - Check the configured executable's version. Distinguish explicit compaction or
   context errors from authentication, usage limits, invalid output, and Meet's
   per-call timeout. A timeout alone does not establish a compaction failure.

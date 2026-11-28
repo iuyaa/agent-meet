@@ -321,8 +321,9 @@ def run_readonly(args, role, settings, data, refs, feedback, started):
                                "state": "ready_for_review", "summary": chat.nonempty(reply.get("text"), "task result")})
             peer.publish(worker, info, "idle", pending_request=None, detail=None)
             return event
-        except (Exception, KeyboardInterrupt):
-            peer.publish(worker, info, "failed", pending_request=None, detail="read-only task call did not finish")
+        except (Exception, KeyboardInterrupt) as exc:
+            peer.publish(worker, info, "failed", pending_request=None, detail="read-only task call did not finish",
+                         error_code=peer.call_error_code(exc))
             raise
 
 

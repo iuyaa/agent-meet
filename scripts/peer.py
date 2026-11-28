@@ -22,6 +22,10 @@ import codex_desktop
 import processes
 
 
+IDLE_TIMEOUT = 180
+MAX_DISCUSSION_CALL = 600
+
+
 CONCLUSION = {
     "type": "object", "additionalProperties": False,
     "properties": {
@@ -95,6 +99,15 @@ def write_json(path, value):
 def read_status(directory):
     path = directory / "status.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"state": "not_started"}
+
+
+def public_status(info):
+    return {key: info[key] for key in ("state", "detail", "error_code", "call_started_at", "last_progress_at")
+            if key in info}
+
+
+def call_error_code(exc):
+    return exc.code if isinstance(exc, chat.CallTimeout) else "call_failed"
 
 
 @contextlib.contextmanager
@@ -184,11 +197,15 @@ def snapshot(args):
 
 
 def publish(directory, info, state, **extra):
+    info.pop("error_code", None)
+    if state != "thinking":
+        info.pop("call_started_at", None)
+        info.pop("last_progress_at", None)
     info.update(state=state, updated_at=chat.utc(time.time()), **extra)
     write_json(directory / "status.json", info)
 
 
-def check_stop(args, directory):
+def check_stop(args, directory, *, discussion_reply=False):
     if (directory / "stop.request").exists():
         raise Interrupted("peer stop requested")
     if getattr(args, "meeting_room", None):
@@ -198,9 +215,47 @@ def check_stop(args, directory):
     status, _ = snapshot(args)
     if status["phase"] == "closed":
         raise Interrupted("discussion closed: " + str(status["close_reason"]))
+    if discussion_reply and status["phase"] == "summarizing":
+        raise chat.CallTimeout("discussion budget reached before the reply finished", code="discussion_budget")
 
 
-def model_response(args, directory, run_directory, info, prompt, turn, response_schema=None):
+class ProgressLog:
+    """Read new complete CLI events without consuming or changing the saved output."""
+
+    def __init__(self, stream, is_progress):
+        self.stream = stream
+        self.is_progress = is_progress
+        self.discarding = False
+
+    def advanced(self):
+        advanced = False
+        frame_limit = 1024 * 1024
+        remaining = 4 * frame_limit
+        while remaining > 0:
+            offset = self.stream.tell()
+            line = self.stream.readline(frame_limit)
+            if not line:
+                break
+            remaining -= len(line)
+            if not line.endswith(b"\n"):
+                if len(line) < frame_limit:
+                    self.stream.seek(offset)
+                    break
+                self.discarding = True
+                continue
+            if self.discarding:
+                self.discarding = False
+                continue
+            try:
+                event = json.loads(line)
+            except (ValueError, RecursionError):
+                continue
+            if isinstance(event, dict) and self.is_progress(event):
+                advanced = True
+        return advanced
+
+
+def model_response(args, directory, run_directory, info, prompt, turn, response_schema=None, *, discussion_reply=False):
     schema = response_schema or RESPONSE_SCHEMA
     backend = args.backend
     prefix = cli_prefix(args.cli, backend)
@@ -218,22 +273,33 @@ def model_response(args, directory, run_directory, info, prompt, turn, response_
     error_path = run_directory / f"turn-{turn:03d}.stderr.txt"
     # Prompt text goes through stdin, never through a shell or command argument.
     exchange = getattr(adapter, "exchange", None)
+    exchange_progress = threading.Event() if exchange else None
+    progress_event = getattr(adapter, "progress", None)
+    adaptive = args.turn_timeout is None
+    hard_limit = MAX_DISCUSSION_CALL if adaptive else args.turn_timeout
     parsed = None
-    with input_path.open("rb") as source, output_path.open("wb") as output, error_path.open("wb") as error:
+    with contextlib.ExitStack() as stack:
+        source = stack.enter_context(input_path.open("rb"))
+        output = stack.enter_context(output_path.open("wb"))
+        error = stack.enter_context(error_path.open("wb"))
+        progress = ProgressLog(stack.enter_context(output_path.open("rb")), progress_event) if progress_event else None
         launch = processes.owned if getattr(args, "task_mode", False) or getattr(adapter, "owned_process", False) else legacy_process
         worker = None
         try:
+            check_stop(args, directory, discussion_reply=discussion_reply)
             with launch(command, cwd=cwd, stdin=subprocess.PIPE if exchange else source,
                         stdout=subprocess.PIPE if exchange else output, stderr=error, env=environment) as process:
-                publish(directory, info, "thinking", child_pid=process.pid, turn=turn)
-                until = time.monotonic() + args.turn_timeout
+                started = last_progress = time.monotonic()
+                reported_progress = None
+                publish(directory, info, "thinking", child_pid=process.pid, turn=turn,
+                        call_started_at=chat.utc(time.time()), last_progress_at=None)
                 try:
                     if exchange:
                         outcome = concurrent.futures.Future()
 
                         def drive():
                             try:
-                                outcome.set_result(exchange(args, process, source, output, info))
+                                outcome.set_result(exchange(args, process, source, output, info, exchange_progress.set))
                             except Exception as exc:
                                 outcome.set_exception(exc)
 
@@ -242,10 +308,21 @@ def model_response(args, directory, run_directory, info, prompt, turn, response_
                     while process.poll() is None or (worker and not outcome.done()):
                         if worker and outcome.done():
                             parsed = outcome.result()
-                        check_stop(args, directory)
-                        if time.monotonic() >= until:
-                            chat.fail(f"{backend.title()} turn timed out after {args.turn_timeout}s; "
-                                      f"see {error_path} and {output_path}")
+                        check_stop(args, directory, discussion_reply=discussion_reply)
+                        now = time.monotonic()
+                        if now - started >= hard_limit:
+                            raise chat.CallTimeout(f"{backend.title()} turn timed out after {hard_limit}s; "
+                                                   f"see {error_path} and {output_path}")
+                        if (progress and progress.advanced()) or (exchange_progress and exchange_progress.is_set()):
+                            if exchange_progress:
+                                exchange_progress.clear()
+                            last_progress = now
+                            if reported_progress is None or now - reported_progress >= 2:
+                                publish(directory, info, "thinking", last_progress_at=chat.utc(time.time()))
+                                reported_progress = now
+                        if adaptive and now - last_progress >= IDLE_TIMEOUT:
+                            raise chat.CallTimeout(f"{backend.title()} reported no turn progress for {IDLE_TIMEOUT}s; "
+                                                   f"see {error_path} and {output_path}", code="idle_timeout")
                         time.sleep(0.2)
                     if worker:
                         parsed = outcome.result()
@@ -352,7 +429,8 @@ def run_worker(args, directory, run_id, info):
                    "allowed_actions": allowed, "status": status,
                    "new_events": [e for e in events if e["id"] > last_cursor]}
         result = model_response(args, directory, run_directory, info,
-                                RULES + "\nDiscussion data:\n" + json.dumps(context, ensure_ascii=False), turn)
+                                RULES + "\nDiscussion data:\n" + json.dumps(context, ensure_ascii=False), turn,
+                                discussion_reply=allowed == ["send"])
         # State may have changed while the model was reading/thinking.
         check_stop(args, directory)
         latest, _ = snapshot(args)
@@ -377,7 +455,8 @@ def worker(args):
                 finished = "completed" if status["close_reason"] == "agreement" else "stopped"
                 publish(directory, info, finished, detail=str(exc))
             except Exception as exc:
-                publish(directory, info, "failed", detail=str(exc))
+                code = call_error_code(exc)
+                publish(directory, info, "failed", detail=str(exc), error_code=code)
                 write_json(directory / (args.run_id + ".ready.json"), {"ok": False, "error": str(exc)})
                 return 1
     except (AlreadyRunning, OSError) as exc:
@@ -394,7 +473,7 @@ def start(args):
     cwd = Path(args.cwd).resolve()
     if not cwd.is_dir():
         chat.fail("project directory does not exist")
-    if not 1 <= args.turn_timeout <= 600:
+    if args.turn_timeout is not None and not 1 <= args.turn_timeout <= MAX_DISCUSSION_CALL:
         chat.fail("turn-timeout must be between 1 and 600 seconds")
     directory = paths(args.room, args.agent)
     try:
@@ -405,7 +484,9 @@ def start(args):
     run_id = uuid.uuid4().hex
     command = [sys.executable, str(Path(__file__).resolve()), "_worker", "--room", str(Path(args.room).resolve()),
                "--as", args.agent, "--cwd", str(cwd), "--cli", args.cli,
-               "--backend", args.backend, "--turn-timeout", str(args.turn_timeout), "--run-id", run_id]
+               "--backend", args.backend, "--run-id", run_id]
+    if args.turn_timeout is not None:
+        command += ["--turn-timeout", str(args.turn_timeout)]
     with (directory / (run_id + ".launch.log")).open("wb") as log:
         process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                    close_fds=True, **processes.launch_options(background=True))
@@ -434,7 +515,7 @@ def main():
             p.add_argument("--cwd", required=True, help="project directory for the model to inspect")
             p.add_argument("--backend", choices=adapters.BACKENDS, default="claude")
             p.add_argument("--cli", help="backend executable, not a shell command")
-            p.add_argument("--turn-timeout", type=int, default=180)
+            p.add_argument("--turn-timeout", type=int, help="hard per-call limit in seconds")
         if name == "_worker":
             p.add_argument("--run-id", required=True)
     args = parser.parse_args()

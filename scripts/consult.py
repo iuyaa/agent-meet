@@ -119,9 +119,14 @@ def initialize(args):
 def status(room):
     config = configuration(room)
     current, _ = snapshot(room, config)
+    model = model_state(room)
+    if model.get("state") == "calling":
+        progress = peer.read_status(peer.paths(room, config["reviewer"]))
+        if progress["state"] == "thinking":
+            model.update({key: progress[key] for key in ("call_started_at", "last_progress_at") if key in progress})
     return {"room": str(Path(room).resolve()), "mode": "existing-main", "main": config["main"], "reviewer": config["reviewer"],
             "backend": config.get("backend", "claude"), "briefing_file": str(directory(room) / "briefing.md"), "briefing": config["briefing"],
-            "model": model_state(room), "status": current,
+            "model": model, "status": current,
             "next_action": "original host must reconcile every review and call chat.py finalize" if current["phase"] == "finalizing" and not current["continuation_needs_approval"] else
             "explain missing evidence and await the user's extension decision" if current["continuation_needs_approval"] else
             "finish or explicitly extend on the user's continuation request" if current["phase"] == "closed" else
@@ -129,7 +134,7 @@ def status(room):
 
 
 def reply(args):
-    if not 1 <= args.turn_timeout <= 600:
+    if args.turn_timeout is not None and not 1 <= args.turn_timeout <= peer.MAX_DISCUSSION_CALL:
         chat.fail("turn-timeout must be between 1 and 600 seconds")
     request_id = chat.nonempty(args.request_id, "request-id")
     if len(request_id) > 200:
@@ -174,8 +179,9 @@ def reply(args):
             chat.fail("the original main must send a new message or propose a conclusion first")
         input_event_id = max((e["id"] for e in events), default=0)
         if cached and cached["phase"] != "response_ready":
-            peer.publish(root, info, "failed", pending_request=None,
-                         detail="this request failed or was interrupted")
+            if info["pending_request"] == request_id:
+                peer.publish(root, info, "failed", pending_request=None,
+                             detail="this request was interrupted")
             chat.fail("this request failed or was interrupted; inspect its logs, then retry explicitly with a NEW request-id")
         if cached and cached.get("epoch", 0) != current["epoch"]:
             chat.fail("this request predates continuation; use a new request-id")
@@ -198,16 +204,18 @@ def reply(args):
                        "new_events": [e for e in events if e["id"] > info["read_cursor"]]}
             try:
                 result = peer.model_response(namespace, peer_root, run_directory, model_info,
-                                             CONSULT_RULES + "\nDiscussion data:\n" + json.dumps(context, ensure_ascii=False), turn)
+                                             CONSULT_RULES + "\nDiscussion data:\n" + json.dumps(context, ensure_ascii=False), turn,
+                                             discussion_reply=allowed == ["send"])
                 cached.update(phase="response_ready", result=result,
                               native_session_id=model_info["native_session_id"], read_cursor=input_event_id)
                 peer.write_json(cache_path, cached)
                 peer.publish(root, info, "response_ready", native_session_id=model_info["native_session_id"])
             except BaseException as exc:
+                code = peer.call_error_code(exc)
                 cached.update(phase="failed", error=str(exc))
                 peer.write_json(cache_path, cached)
                 peer.publish(root, info, "failed", pending_request=None, detail=str(exc),
-                             native_session_id=model_info["native_session_id"])
+                             native_session_id=model_info["native_session_id"], error_code=code)
                 raise
         try:
             latest, latest_events = snapshot(args.room, config)
@@ -245,7 +253,7 @@ def main():
             p.add_argument("--minutes", type=float, default=10)
         elif name == "reply":
             p.add_argument("--request-id", required=True)
-            p.add_argument("--turn-timeout", type=int, default=180)
+            p.add_argument("--turn-timeout", type=int, help="hard per-call limit in seconds")
     args = parser.parse_args()
     try:
         if args.command == "init":
@@ -258,7 +266,8 @@ def main():
         return 0
     except (chat.ChatError, peer.Interrupted, peer.AlreadyRunning, OSError, sqlite3.Error, ValueError) as exc:
         detail = str(exc) or "this participant already has an active call; wait for that execution"
-        print(json.dumps({"ok": False, "error": detail}, ensure_ascii=False), file=sys.stderr)
+        print(json.dumps({"ok": False, "error": detail, "error_code": peer.call_error_code(exc)},
+                         ensure_ascii=False), file=sys.stderr)
         return 1
 
 

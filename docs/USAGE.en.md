@@ -213,7 +213,9 @@ python3 /absolute/path/agent-meet/scripts/chat.py export --room ROOM --output DI
 ```
 
 The two-agent defaults are 12 ordinary messages including the briefing, ten minutes of discussion, two minutes of conclusion review, and at most four drafts.
-Each CLI call defaults to a 180-second timeout; `reply --turn-timeout` accepts 1–600 seconds.
+A discussion call waits up to 180 seconds without visible progress and up to 600 seconds in total.
+Text, reasoning, or tool updates from the CLI reset the idle timer. An explicit
+`--turn-timeout` (1–600 seconds) sets a hard limit for the call. Discussion and review deadlines still apply.
 Stopping a discussion terminates the CLI for an active call.
 Logs, request caches, and Claude's native session ID are in `<ROOM>.consult/`; active call state is in `<ROOM>.peers/`.
 Keep discussion data out of version control. The tools do not rewrite project configuration or user login data.

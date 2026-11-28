@@ -201,7 +201,9 @@ python3 /absolute/path/agent-meet/scripts/chat.py export --room ROOM --output DI
 ```
 
 默认 12 条普通消息（含简报）、10 分钟讨论、2 分钟结论审核、最多四次草案。
-单次 CLI 调用默认超时 180 秒，可用 `reply --turn-timeout` 设置为 1–600 秒。
+讨论中的单次调用默认等待可见进展，连续 180 秒无进展时结束，单次最多等待 600 秒。
+CLI 发出的正文、推理或工具进展可以刷新空闲计时。显式传入 `--turn-timeout`（1–600 秒）
+会设定单次硬上限。会议的讨论和审核时限照常生效。
 停止讨论会让正在执行的调用终止其 CLI。日志、请求缓存及 Claude 原生会话 ID 位于
 `<ROOM>.consult/`，运行中调用的状态位于 `<ROOM>.peers/`。
 讨论目录应放在版本控制外；工具不会改写项目配置或用户登录信息。

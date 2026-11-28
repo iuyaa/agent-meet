@@ -363,9 +363,18 @@ the user turn merely because initialization or one reviewer call succeeded.
 ## Limits and errors
 
 The default budget is 12 regular messages including your briefing, 10 minutes of
-discussion, then 2 minutes for review. A single CLI call defaults to 180 seconds;
-`--turn-timeout` can be 1–600. Timeouts, authentication/permission errors and invalid
-responses return an error to you without inventing a reply or agreement.
+discussion, then 2 minutes for review. A discussion call waits up to 180 seconds
+without visible progress and up to 600 seconds in total. Native text, reasoning
+or tool progress can reset the idle timer. A CLI that buffers its reply cannot
+show progress during that wait. An explicit `--turn-timeout` (1–600 seconds)
+sets the hard call limit in place of the default idle and total limits. The
+room's discussion and review deadlines still apply.
+Use `error_code` (or the role's entry in `group.py round`'s `error_codes`) when
+reporting the outcome. `idle_timeout` means no progress was visible within the
+idle period. `turn_timeout` is the hard per-call limit, `discussion_budget` is
+the room's discussion budget, and `backend_timeout` is an explicit CLI timeout.
+For `call_failed`, report the cause supported by the error and logs. Keep
+incomplete responses out of the transcript and review.
 
 For context compaction or session-resumption failures, read
 [session failure diagnosis](references/session-failures.md) before proposing a

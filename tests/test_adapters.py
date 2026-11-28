@@ -1,9 +1,11 @@
 """Subprocess integration for agent-independent hosts and native conversation reuse."""
+import argparse
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -12,6 +14,8 @@ from test_peer import SCRIPTS, FAKE_CLAUDE
 from test_discuss import FAKE_CODEX
 import adapters
 import codex_desktop
+import consult
+import group
 import peer
 
 FAKE_AGENT = r'''#!/usr/bin/env python3
@@ -146,7 +150,8 @@ import time
 from pathlib import Path
 
 if sys.argv[1:] == ['--version']:
-    print('1.5.18')
+    version_file = Path('agy-version')
+    print(version_file.read_text(encoding='utf-8') if version_file.exists() else '1.5.18')
     sys.exit(0)
 
 args = sys.argv[1:]
@@ -179,12 +184,23 @@ print(json.dumps({'event': 'init', 'conversation_id': session,
                   'init': {'agent': 'other-agent' if mode == 'wrong-agent' else agent}}), flush=True)
 if mode == 'stall':
     time.sleep(30)
+if mode in ('active', 'heartbeats'):
+    for index in range(7):
+        time.sleep(0.28)
+        print(json.dumps({'event': 'step_update', 'step_update': {'step_type': 'agent_response',
+                          'state': 'ACTIVE', 'text_delta': 'part' if mode == 'active' else ''}}), flush=True)
+        if mode == 'heartbeats':
+            print(json.dumps({'event': 'heartbeat', 'timestamp': index}), flush=True)
+            print('diagnostic heartbeat', file=sys.stderr, flush=True)
 reply = {'action': 'send', 'text': '可复用原会话。', 'decision': 'none', 'conclusion': {
     'summary': '', 'agreements': [], 'disagreements': [], 'open_questions': [], 'evidence_message_ids': []}}
 if mode != 'truncated':
-    print(json.dumps({'event': 'result', 'result': {
+    result = {
         'status': 'WAITING' if mode == 'waiting' else 'SUCCESS',
-        'conversation_id': session, 'response': json.dumps(reply)}}))
+        'conversation_id': session, 'response': json.dumps(reply)}
+    if mode == 'print-timeout':
+        result['finished_reason'] = 'print_timeout'
+    print(json.dumps({'event': 'result', 'result': result}))
 '''
 
 
@@ -421,9 +437,10 @@ class AdapterTests(unittest.TestCase):
                     self.reply(ok=False)
                     self.assertEqual(self.command('consult.py', 'status')['status']['message_count'], 1)
 
-    def test_antigravity_resumes_through_promotion_and_readonly_assignment(self):
+    def test_antigravity_resumes_after_version_change_and_promotion(self):
         self.initialize('antigravity', 'codex', '--model', 'fixture-model')
         native = self.reply()['model']['native_session_id']
+        (self.root / 'agy-version').write_text('1.6.0', encoding='utf-8')
         self.send('codex')
         self.assertEqual(self.reply('followup')['model']['native_session_id'], native)
         spec = self.root / 'agy-task.json'
@@ -444,7 +461,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(adapters.default_cli('antigravity'), 'agy')
 
     def test_antigravity_rejects_incomplete_turns_and_different_conversations(self):
-        for mode in ('truncated', 'waiting', 'wrong-agent', 'switch'):
+        for mode in ('truncated', 'waiting', 'wrong-agent', 'switch', 'print-timeout'):
             with self.subTest(mode=mode):
                 self.room = self.root / f'agy-{mode}.sqlite'
                 mode_path = self.root / 'mode'
@@ -453,10 +470,13 @@ class AdapterTests(unittest.TestCase):
                 native = self.reply()['model']['native_session_id']
                 self.send()
                 mode_path.write_text(mode)
-                self.reply('followup', ok=False)
+                failure = self.reply('followup', ok=False)
+                code = 'backend_timeout' if mode == 'print-timeout' else 'call_failed'
+                self.assertEqual(failure['error_code'], code)
                 state = self.command('consult.py', 'status')
                 self.assertEqual(state['status']['message_count'], 3)
                 self.assertEqual(state['model']['native_session_id'], native)
+                self.assertEqual(state['model']['error_code'], code)
 
     def test_antigravity_first_timeout_keeps_the_native_conversation_for_retry(self):
         for script, action in (('consult.py', 'reply'), ('group.py', 'round')):
@@ -477,15 +497,63 @@ class AdapterTests(unittest.TestCase):
                 error = failure['error'] if action == 'reply' else failure['errors']['antigravity']
                 self.assertIn('timed out after 1s', error)
                 self.assertIn('turn-001.result.json', error)
+                code = failure['error_code'] if action == 'reply' else failure['error_codes']['antigravity']
+                self.assertEqual(code, 'turn_timeout')
+                self.command(script, action, '--request-id', 'interrupted', ok=False)
                 state = self.command(script, 'status')
                 self.assertEqual(state['status']['message_count'], 1)
+                worker = state['model'] if action == 'reply' else state['workers']['antigravity']
+                self.assertEqual(worker['error_code'], 'turn_timeout')
                 known = state['model'] if action == 'reply' else peer.read_status(peer.paths(self.room, 'antigravity'))
                 session = self.calls('antigravity')[0]['session']
                 self.assertEqual(known['native_session_id'], session)
                 (self.root / 'mode').unlink()
-                self.command(script, action, '--request-id', 'retry')
+                retried = self.command(script, action, '--request-id', 'retry')
+                worker = retried['model'] if action == 'reply' else retried['workers']['antigravity']
+                self.assertNotIn('error_code', worker)
                 argv = self.calls('antigravity')[-1]['argv']
                 self.assertEqual(argv[argv.index('--conversation') + 1], session)
+
+    def test_adaptive_wait_counts_progress_and_honors_call_limits(self):
+        scenarios = [
+            ('active', None, 4, None),
+            ('heartbeats', None, 4, 'idle_timeout'),
+            ('active', 1, 4, 'turn_timeout'),
+            ('active', None, 1, 'turn_timeout'),
+        ]
+        for index, (mode, explicit, maximum, code) in enumerate(scenarios):
+            with self.subTest(mode=mode, explicit=explicit, maximum=maximum):
+                self.room = self.root / f'adaptive-{index}.sqlite'
+                self.initialize('antigravity')
+                (self.root / 'mode').write_text(mode)
+                args = argparse.Namespace(room=self.room, request_id='first', turn_timeout=explicit)
+                with mock.patch.object(peer, 'IDLE_TIMEOUT', 1), mock.patch.object(peer, 'MAX_DISCUSSION_CALL', maximum):
+                    if code:
+                        with self.assertRaises(peer.chat.CallTimeout) as failure:
+                            consult.reply(args)
+                        self.assertEqual(failure.exception.code, code)
+                    else:
+                        self.assertEqual(consult.reply(args)['event']['sender'], 'antigravity')
+                state = consult.status(self.room)
+                self.assertEqual(state['status']['message_count'], 1 if code else 2)
+                self.assertEqual(state['model'].get('error_code'), code)
+                self.assertIsNotNone(state['model']['native_session_id'])
+                self.assertEqual(len(self.calls('antigravity')), index + 1)
+
+    def test_adaptive_group_reply_stops_at_the_discussion_deadline(self):
+        roles = self.root / 'agy-roles.json'
+        roles.write_text(json.dumps([{'id': 'antigravity', 'title': 'Review', 'focus': 'Check facts',
+                                      'backend': 'antigravity', 'cli': str(self.clis['antigravity'])}]))
+        self.command('group.py', 'init', '--cwd', self.root, '--briefing-file', self.brief,
+                     '--main', 'codex', '--roles-file', roles)
+        (self.root / 'mode').write_text('active')
+        with peer.chat.database(self.room, write=True) as conn:
+            conn.execute('UPDATE room SET discuss_until=?', (time.time() + 1,))
+        args = argparse.Namespace(room=self.room, request_id='first', only=None, turn_timeout=None)
+        outcome = group.run_round(args)
+        self.assertEqual(outcome['error_codes'], {'antigravity': 'discussion_budget'})
+        self.assertEqual(outcome['status']['message_count'], 1)
+        self.assertEqual(len(self.calls('antigravity')), 1)
 
     def test_invalid_new_engine_outputs_never_become_discussion_messages(self):
         for backend in ('pi','opencode'):

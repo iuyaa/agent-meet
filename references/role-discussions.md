@@ -164,9 +164,10 @@ Use `chat.py export/stop/read` as in SKILL.md. Reads are paginated; follow
 per-role progress, rounds and actual review counts. Fold settings survive polls
 and browser refreshes. The page does not inject messages into the original UI.
 
-Default discussion window: 30 minutes plus 10 minutes for review. Per-role CLI
-timeout defaults to 180 seconds (`--turn-timeout 1–600`). More roles use more
-model calls/account quota. Reaching the round cap stops new ordinary messages;
+Default discussion window: 30 minutes plus 10 minutes for review. A role can
+wait up to 180 seconds without visible progress and up to 600 seconds in total.
+An explicit `--turn-timeout 1–600` sets a hard limit for the call within the room's
+budget. More roles use more model calls and quota. Reaching the round cap stops new ordinary messages;
 the conclusion/review window remains. If time expires mid-round or a role cannot
 respond, report the partial record; never fabricate a finished round or approval.
 Stopping the room cancels active role CLIs. Logs and batch caches are in

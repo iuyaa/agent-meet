@@ -263,8 +263,7 @@ def status(room):
         current, settings = state(conn), config(conn)
     workers = {}
     for role in settings["roles"]:
-        info = peer.read_status(peer.paths(room, role["id"]))
-        workers[role["id"]] = {key: info[key] for key in ("state", "detail") if key in info}
+        workers[role["id"]] = peer.public_status(peer.read_status(peer.paths(room, role["id"])))
     return {"room": str(Path(room).resolve()), "mode": "group", "status": current, "briefing": settings["briefing"],
             "main": settings["main"]["id"], "roles": public_roles(settings), "workers": workers,
             "next_action": "original host must reconcile every review and call chat.py finalize" if current["phase"] == "finalizing" and not current["continuation_needs_approval"] else
@@ -362,14 +361,16 @@ def call_role(args, role, settings, batch, digest):
                                           turn_timeout=args.turn_timeout)
             try:
                 result = peer.model_response(namespace, worker, run_dir, info,
-                                             RULES + "\nDiscussion data:\n" + json.dumps(context, ensure_ascii=False), 1)
+                                             RULES + "\nDiscussion data:\n" + json.dumps(context, ensure_ascii=False), 1,
+                                             discussion_reply=batch["allowed"] == ["send"])
                 cached.update(phase="response_ready", result=result, native_session_id=info["native_session_id"])
                 peer.write_json(cache_path, cached)
                 peer.publish(worker, info, "response_ready")
             except BaseException as exc:
+                code = peer.call_error_code(exc)
                 cached.update(phase="failed", error=str(exc))
                 peer.write_json(cache_path, cached)
-                peer.publish(worker, info, "failed", pending_request=None, detail=str(exc))
+                peer.publish(worker, info, "failed", pending_request=None, detail=str(exc), error_code=code)
                 raise
         try:
             applied = commit_response(args.room, role, cached, event_request)
@@ -385,7 +386,7 @@ def call_role(args, role, settings, batch, digest):
 
 
 def run_round(args):
-    if not 1 <= args.turn_timeout <= 600:
+    if args.turn_timeout is not None and not 1 <= args.turn_timeout <= peer.MAX_DISCUSSION_CALL:
         chat.fail("turn-timeout must be between 1 and 600 seconds")
     request_id = chat.nonempty(args.request_id, "request-id")
     if len(request_id) > 200:
@@ -442,7 +443,7 @@ def run_round(args):
                                               "evidence": [e for e in events if e["id"] in evidence]}
             peer.write_json(batch_file, batch)
         roles = [r for r in settings["roles"] if r["id"] in batch["selected"]]
-        results, errors = {}, {}
+        results, errors, error_codes = {}, {}, {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(roles)) as pool:
             futures = {pool.submit(call_role, args, role, settings, batch, digest): role["id"] for role in roles}
             for future in concurrent.futures.as_completed(futures):
@@ -451,7 +452,8 @@ def run_round(args):
                     results[name] = future.result()
                 except (chat.ChatError, peer.Interrupted, peer.AlreadyRunning, OSError, ValueError, sqlite3.Error) as exc:
                     errors[name] = str(exc) or "this role already has an active call"
-        return {"ok": not errors, "results": results, "errors": errors, **status(args.room)}
+                    error_codes[name] = peer.call_error_code(exc)
+        return {"ok": not errors, "results": results, "errors": errors, "error_codes": error_codes, **status(args.room)}
 
 
 def main():
@@ -472,7 +474,7 @@ def main():
         elif name == "round":
             p.add_argument("--request-id", required=True)
             p.add_argument("--only", help="call only this currently due role")
-            p.add_argument("--turn-timeout", type=int, default=180)
+            p.add_argument("--turn-timeout", type=int, help="hard per-call limit in seconds")
     args = parser.parse_args()
     try:
         result = initialize(args) if args.command == "init" else run_round(args) if args.command == "round" else status(args.room)

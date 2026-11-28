@@ -591,6 +591,24 @@ function renderTask(data) {
   if (!initial && nearBottom) $('activity').scrollIntoView({ block: 'nearest' });
 }
 
+function callFailureLabel(worker) {
+  if (worker.error_code === 'turn_timeout') return '调用超时';
+  if (worker.error_code === 'idle_timeout') return '等待进展超时';
+  if (worker.error_code === 'discussion_budget') return '讨论时限已到';
+  if (worker.error_code === 'backend_timeout') return 'CLI 超时';
+  return '调用失败';
+}
+
+function callProgressLabel(worker) {
+  const now = Date.now();
+  const elapsed = Math.floor((now - Date.parse(worker.call_started_at)) / 1000);
+  if (!Number.isFinite(elapsed) || elapsed < 15) return '正在回复…';
+  const recent = now - Date.parse(worker.last_progress_at) < 30000;
+  const minutes = Math.floor(elapsed / 60);
+  const duration = (minutes ? minutes + ' 分 ' : '') + (elapsed % 60) + ' 秒';
+  return (recent ? '仍在处理' : '等待回复') + ' · 已等待 ' + duration;
+}
+
 function render(data) {
   if (data.status.mode === 'task') return renderTask(data);
   const s = data.status,
@@ -604,6 +622,7 @@ function render(data) {
     ['thinking', 'calling', 'response_ready'].includes(w.state),
   );
   const failed = Object.entries(data.workers || {}).filter(([, w]) => w.state === 'failed');
+  const singleFailure = model.state === 'failed' ? model : worker.state === 'failed' ? worker : null;
   $('topic').textContent = s.topic;
   document.title = s.topic + ' · Meet';
   $('participants').textContent = s.participants.map(display).join('  +  ');
@@ -629,9 +648,10 @@ function render(data) {
           : '讨论已停止 · 已有记录已保留';
   } else if (isGroup) {
     activity = active.length
-      ? active.map(([id]) => display(id)).join('、') + ' 正在回复…'
+      ? active.map(([id, w]) => display(id) + ' ' + callProgressLabel(w)).join(' ／ ')
       : failed.length
-        ? failed.map(([id]) => display(id)).join('、') + ' 调用失败 · 请在原会话处理'
+        ? failed.map(([id, w]) => display(id) + ' ' + callFailureLabel(w)).join(' · ') +
+          ' · 请在原会话处理'
         : s.pending_reviewers.length
           ? '等待审核：' + s.pending_reviewers.map(display).join('、')
           : s.phase === 'summarizing'
@@ -639,10 +659,10 @@ function render(data) {
             : s.pending_speakers.length
               ? '等待发言：' + s.pending_speakers.map(display).join('、')
               : '本轮已完成 · 等待原主持人追问或总结';
-  } else if (model.state === 'failed' || worker.state === 'failed') {
-    activity = '本轮调用失败 · 请在原会话检查后处理';
+  } else if (singleFailure) {
+    activity = '本轮' + callFailureLabel(singleFailure) + ' · 请在原会话检查后处理';
   } else if (model.state === 'calling' || worker.state === 'thinking') {
-    activity = data.reviewer + ' 正在回复…';
+    activity = data.reviewer + ' ' + callProgressLabel(worker.state === 'thinking' ? worker : model);
   } else if (s.latest_proposal && !s.latest_review) {
     activity = '等待结论审核';
   } else if (s.phase === 'summarizing') {
@@ -671,12 +691,10 @@ function render(data) {
   const error =
     !stopped &&
     (isGroup
-      ? failed.map(([id, w]) => display(id) + '：' + (w.detail || '调用失败')).join('\n')
-      : model.state === 'failed'
-        ? model.detail
-        : worker.state === 'failed'
-          ? worker.detail
-          : null);
+      ? failed
+          .map(([id, w]) => display(id) + ' ' + callFailureLabel(w) + (w.detail ? '：' + w.detail : ''))
+          .join('\n')
+      : singleFailure && (singleFailure.detail || callFailureLabel(singleFailure)));
   $('notice').hidden = !error;
   $('notice').textContent = error || '';
   $('stop').disabled = stopped;
@@ -844,7 +862,7 @@ function render(data) {
               : ['thinking', 'calling', 'response_ready'].includes(w.state)
                 ? '回复中'
                 : w.state === 'failed'
-                  ? '调用失败'
+                  ? callFailureLabel(w)
                   : s.pending_reviewers.includes(role.id)
                     ? '待审核'
                     : review

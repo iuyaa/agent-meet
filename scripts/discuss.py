@@ -115,7 +115,7 @@ def start(args):
     cwd = str(Path(args.cwd).resolve())
     if not Path(cwd).is_dir():
         chat.fail("project directory does not exist")
-    if not 1 <= args.turn_timeout <= 600:
+    if args.turn_timeout is not None and not 1 <= args.turn_timeout <= peer.MAX_DISCUSSION_CALL:
         chat.fail("turn-timeout must be between 1 and 600 seconds")
     topic = requested_topic
     chat.nonempty(topic, "topic")
@@ -172,7 +172,7 @@ def main():
             topic.add_argument("--topic-file")
             p.add_argument("--codex-cli", default="codex")
             p.add_argument("--claude-cli", default="claude")
-            p.add_argument("--turn-timeout", type=int, default=180)
+            p.add_argument("--turn-timeout", type=int, help="hard per-call limit in seconds")
             p.add_argument("--max-messages", type=int, default=12)
             p.add_argument("--minutes", type=float, default=10)
         elif name == "wait":

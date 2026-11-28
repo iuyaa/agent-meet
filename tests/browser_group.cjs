@@ -84,6 +84,23 @@ let browser;
   assert.equal(await page.locator('.role-card').count(), 6);
   for (const role of roles)
     assert.match(await page.locator('#roles-list').innerText(), new RegExp(role.title));
+  const [slowRole, failedRole] = roles;
+  const modePath = (role) => path.join(root, 'mode-' + role.id + '.txt');
+  fs.writeFileSync(modePath(slowRole), 'delay');
+  fs.writeFileSync(modePath(failedRole), 'fail');
+  await assert.rejects(round('timeout', '--only', slowRole.id, '--turn-timeout', '1'), (err) =>
+    JSON.parse(err.stdout).error_codes[slowRole.id] === 'turn_timeout',
+  );
+  await assert.rejects(round('failure', '--only', failedRole.id), (err) =>
+    JSON.parse(err.stdout).error_codes[failedRole.id] === 'call_failed',
+  );
+  await page.waitForFunction(([timedOut, failed]) => {
+    const activity = document.getElementById('activity').textContent;
+    return activity.includes(timedOut + ' 调用超时') && activity.includes(failed + ' 调用失败');
+  }, [slowRole.title, failedRole.title]);
+  assert.match(await page.locator('.role-card').filter({ hasText: slowRole.title }).innerText(), /调用超时/);
+  fs.writeFileSync(modePath(slowRole), 'slow');
+  fs.writeFileSync(modePath(failedRole), 'slow');
   const pending = round('first');
   await page.waitForFunction(() =>
     document.getElementById('roles-list').textContent.includes('回复中'),
@@ -205,7 +222,8 @@ let browser;
       .trim()
       .split('\n')
       .map(JSON.parse);
-    assert.equal(calls.length, 3);
+    const priorFailedAttempt = role.id === slowRole.id || role.id === failedRole.id;
+    assert.equal(calls.length, priorFailedAttempt ? 4 : 3);
     const argv = calls.at(-1).argv;
     assert.equal(argv[argv.indexOf('--resume') + 1], originalSessions[role.id]);
   }

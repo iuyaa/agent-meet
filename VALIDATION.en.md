@@ -4,6 +4,11 @@
 
 Environment: Linux and Python 3.12. Runtime tools use only the Python standard library.
 
+## v0.17.2 progress-aware waiting
+
+- Verified with official Antigravity CLI `1.5.18` and a local model fixture that one streaming call can pass the idle threshold and complete. A simulated CLI version change resumed the original conversation for a follow-up and a read-only assignment.
+- Regression tests cover inactivity, explicit call limits and room deadlines. Browser checks verify elapsed wait time and recording only complete replies.
+
 ## v0.17.1 Antigravity timeout recovery
 
 - Stalled the first streaming reply from official CLI `1.5.18` using a local model fixture. The timed-out turn recorded no meeting reply, an explicit retry reused the same native conversation, and the call directory contained `agy.log`.

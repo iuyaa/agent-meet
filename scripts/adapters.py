@@ -21,6 +21,13 @@ class Legacy:
         self.backend = backend
         self.npm_entries = npm_entries
 
+    def progress(self, event):
+        item = event.get("item")
+        return (self.backend == "codex" and isinstance(item, dict)
+                and event.get("type") in ("item.started", "item.updated", "item.completed")
+                and item.get("type") in ("agent_message", "reasoning", "command_execution",
+                                         "mcp_tool_call", "web_search"))
+
     def command(self, args, directory, run_directory, info, prefix, answer_path, RESPONSE_SCHEMA):
         backend = self.backend
         if backend == "claude":
@@ -123,6 +130,22 @@ def records(path, *, plain_diagnostics=False):
     return rows
 
 
+def has_text(value):
+    return isinstance(value, str) and bool(value)
+
+
+def message_progress(event):
+    message = event.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    if event.get("type") not in ("assistant", "user") or not isinstance(content, list):
+        return False
+    parts = [part for part in content if isinstance(part, dict)]
+    if event["type"] == "user":
+        return any(part.get("type") == "tool_result" for part in parts)
+    return any(part.get("type") == "tool_use" or has_text(part.get("text")) or has_text(part.get("thinking"))
+               for part in parts)
+
+
 def response(text):
     text = text.strip()
     if text.startswith("```json\n") and text.endswith("```"):
@@ -149,6 +172,15 @@ class Pi:
     prompt_schema = True
     npm_entries = ("@earendil-works/pi-coding-agent/dist/bundle/cli.js",
                    "@mariozechner/pi-coding-agent/dist/cli.js")
+
+    @staticmethod
+    def progress(event):
+        if event.get("type") in ("tool_execution_start", "tool_execution_update", "tool_execution_end"):
+            return True
+        delta = event.get("assistantMessageEvent")
+        return (event.get("type") == "message_update" and isinstance(delta, dict)
+                and delta.get("type") in ("text_delta", "thinking_delta", "toolcall_delta")
+                and has_text(delta.get("delta")))
 
     @staticmethod
     def session_file(directory):
@@ -204,6 +236,14 @@ class OpenCode:
     prompt_schema = True
     # These npm launchers require Bun; use the native platform binary instead.
     npm_entries = ()
+
+    @staticmethod
+    def progress(event):
+        part = event.get("part")
+        return isinstance(part, dict) and (
+            event.get("type") == "tool_use" or
+            event.get("type") == "text" and has_text(part.get("text"))
+        )
 
     def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
         match = re.search(r"\b([12])\.\d+\.\d+", probe(prefix, "--version", args.cwd))
@@ -269,6 +309,10 @@ class DeepSeek:
         "tool-executor-ptc", "mcp-resources",
     )
 
+    @staticmethod
+    def progress(event):
+        return event.get("type") == "text" and has_text(event.get("text"))
+
     def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
         require_version(prefix, args.cwd, "dsh", self.version)
         overlay = [{"id": row, "disabled": True} for row in self.disabled]
@@ -311,6 +355,7 @@ class Qwen:
     owned_process = True
     npm_entries = ("@qwen-code/qwen-code/cli-entry.js",)
     version = "0.28.0"
+    progress = staticmethod(message_progress)
     # --safe-mode ignores --core-tools. Exclude the supported version's
     # built-ins other than read_file, grep_search, glob and list_directory.
     excluded = """
@@ -362,6 +407,7 @@ class Qoder:
     npm_entries = ("@qoder-ai/qodercli/bundle/qodercli.js",)
     node_scripts = (".js",)
     version = "1.1.93"
+    progress = staticmethod(message_progress)
     tools = ("Read", "Glob", "Grep", "WebSearch", "WebFetch")
 
     def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
@@ -405,6 +451,11 @@ class Hermes:
     # releases can keep a turn running when the CLI disconnects.
     version = "0.21.5"
 
+    @staticmethod
+    def progress(event):
+        return (event.get("type") == "text" and has_text(event.get("text"))
+                or event.get("type") in ("tool_use", "tool_result") and has_text(event.get("name")))
+
     def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
         environment = {**os.environ, "PYTHONIOENCODING": "utf-8", "HERMES_ENABLE_PROJECT_PLUGINS": "0"}
         reported = probe(prefix, "--version", args.cwd, env=environment)
@@ -443,7 +494,14 @@ class Antigravity:
     owned_process = True
     npm_entries = ()
     cli = "agy"
-    version = "1.5.18"
+
+    @staticmethod
+    def progress(event):
+        step = event.get("step_update")
+        return event.get("event") == "step_update" and isinstance(step, dict) and (
+            step.get("step_type") in ("agent_response", "agent_thought") and has_text(step.get("text_delta"))
+            or step.get("state") == "DONE" and has_text(step.get("tool_name"))
+        )
 
     @staticmethod
     def agent_name(directory):
@@ -469,7 +527,6 @@ class Antigravity:
         return root
 
     def command(self, args, directory, run_directory, info, prefix, answer_path, schema):
-        require_version(prefix, args.cwd, "Antigravity", self.version)
         command = prefix + ["--input-format", "stream-json", "--output-format", "stream-json",
                             "--disable-slash-commands", "--agent", self.agent_name(directory),
                             "--add-dir", args.cwd, "--log-file", str(run_directory / "agy.log")]
@@ -509,7 +566,6 @@ class Antigravity:
         final = last.get("result")
         if (last.get("event") != "result" or not isinstance(final, dict)
                 or final.get("status") != "SUCCESS" or final.get("error")
-                or not isinstance(final.get("response"), str)
                 or any(row.get("event") in ("result", "error") for row in rows[:-1])):
             chat.fail(f"Antigravity did not complete a successful response; see {output_path}")
         init = start.get("init")
@@ -520,15 +576,21 @@ class Antigravity:
         session = session_ids([start, final], "conversation_id")
         if start.get("conversation_id") != session or final.get("conversation_id") != session:
             chat.fail(f"Antigravity did not confirm its native conversation ID; see {output_path}")
+        if final.get("finished_reason") == "print_timeout":
+            raise chat.CallTimeout(f"Antigravity CLI reached its own print timeout; see {output_path}",
+                                   code="backend_timeout")
+        if not isinstance(final.get("response"), str):
+            chat.fail(f"Antigravity did not complete a successful response; see {output_path}")
         return response(final["response"]), session
 
 
 class ZCodeConnection:
     """One stdio connection and one correlated meeting turn."""
 
-    def __init__(self, process, log):
+    def __init__(self, process, log, on_progress):
         self.process = process
         self.log = log
+        self.on_progress = on_progress
         self.request_id = 0
         self.session = None
         self.input_id = None
@@ -574,9 +636,12 @@ class ZCodeConnection:
         same_input = payload.get("inputId") == self.input_id
         if kind == "turn.started" and same_input:
             self.turn_id = event.get("turnId")
-        if kind not in ("turn.completed", "turn.failed"):
-            return
         same_turn = self.turn_id and event.get("turnId") == self.turn_id
+        if kind not in ("turn.completed", "turn.failed"):
+            if same_turn and (kind == "tool.updated" or
+                              kind in ("model.streaming", "part.delta") and has_text(payload.get("delta"))):
+                self.on_progress()
+            return
         if same_input or (payload.get("inputId") is None and same_turn):
             if kind != "turn.completed" or payload.get("resultType") != "success":
                 chat.fail("ZCode reported an unsuccessful meeting turn; see the CLI logs")
@@ -611,8 +676,8 @@ class ZCode:
                        "ZCODE_LOG_DIR": str(storage / "logs")}
         return prefix + ["app-server", "--stdio", "--cwd", args.cwd], environment
 
-    def exchange(self, args, process, source, output, info):
-        connection = ZCodeConnection(process, output)
+    def exchange(self, args, process, source, output, info, on_progress):
+        connection = ZCodeConnection(process, output, on_progress)
         expected = info.get("native_session_id")
         params = {"workspace": {"workspacePath": args.cwd, "workspaceKey": args.cwd},
                   "toolAllowlist": ["Read", "Glob", "Grep"]}

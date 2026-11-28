@@ -48,6 +48,12 @@ class ChatError(Exception):
     pass
 
 
+class CallTimeout(ChatError):
+    def __init__(self, message, *, code="turn_timeout"):
+        super().__init__(message)
+        self.code = code
+
+
 def fail(message):
     raise ChatError(message)
 

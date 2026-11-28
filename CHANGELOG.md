@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.2 — Progress-aware discussion timeouts
+
+- Keep the same discussion call running while the CLI reports progress. By default, end the call after 180 seconds without visible progress or 600 seconds total. Explicit call limits and room deadlines take precedence.
+- Show elapsed wait time and distinguish idle, call, and CLI timeouts from other call failures.
+- Launch compatible Antigravity CLIs without pinning their version. Validate the selected agent, completed response, and original conversation as before.
+
 ## 0.17.1 — Antigravity timeout recovery
 
 - Retain Antigravity's conversation ID after it initializes, even when the first turn times out before producing a reply. An explicit retry resumes that conversation.
